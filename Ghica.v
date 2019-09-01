@@ -4,7 +4,29 @@ From Games Require Import
 From Coq Require Import
      Relations.
 
+(**
+   We now implement "The far side of the cube" as described by Dan R. Ghica.
+   It is stated as being the simplest traditional game semantics in the sense
+   that very few restrictions are put on the structure. In this sense, it is
+   not a very interesting domain since it is too large for definability to hold
+   when taken as a model of a programming language.
+   However it is a good starting point upon which enforce additional constraints
+   to model various programming constructs.
+   This approach is referred to as "Abramsky's Cube".
+ *)
+
+
 Section Arena.
+
+  (**
+     [Arena]s are the basic structure upon which games are played.
+     It contains:
+     - a type [M] of moves that can be taken;
+     - a subset of moves [Q] that are interpreted as queries;
+     - a subset of moves [O] that are assigned to the opponent;
+     - a subset of moves [I] that are initial;
+     - a relation of moves stating how taking a move enables new moves to become legal.
+   *)
 
   Class Arena :=
     {
@@ -15,11 +37,20 @@ Section Arena.
       enable: M -> M -> Prop
     }.
 
+  (* The complement of [Q] are answers [A] *)
   Definition A `{Arena} := fun m => ~ Q m.
+  (* The complement of [O] are player moves [P] *)
   Definition P `{Arena} := fun m => ~ O m.
 
   Infix "⊢" := enable (at level 50).
 
+  (**
+     Constraints are then enforced on arenas:
+     - Initial moves are exclusively queries by opponent;
+     - Only queries can enable new moves;
+     - Plays are alternating: a move of a polarity can only enable moves of the other polarity;
+     - Initial move cannot be enabled.
+   *)
   Record Arena_WF `{Arena} :=
     {
       init_WF: forall m, I m -> Q m /\ O m;
@@ -35,6 +66,10 @@ Notation "⟨ M , Q , O , I , R ⟩" := (Build_Arena M Q O I R).
 
 Section Relations.
 
+  (**
+     Utilities to manipulates predicates and relations.
+     Should eventually be moved somewhere else.
+   *)
   Section Pred.
     
     Definition TT {A: Type}: A -> Prop := fun _ => True.
@@ -82,8 +117,13 @@ Inductive void: Type :=.
 
 Section Arena_Constructs.
 
-  Section Product.
+  (**
+     We can then construct combinators over arenas.
+   *)
 
+    (* The product is a straightforward join of both arenas.
+       Intuitively, both games are played in parallel without any interaction.
+     *)
     Definition Prod_Arena (A1 A2: Arena): Arena :=
       ⟨
         @M A1 + @M A2,
@@ -93,6 +133,7 @@ Section Arena_Constructs.
         enable +'' enable
       ⟩.
 
+    (* The unit arena contains no move. *)
     Definition Unit_Arena: Arena :=
       ⟨
         void,
@@ -102,10 +143,11 @@ Section Arena_Constructs.
         FF'
       ⟩.
 
-  End Product.
-
-  Section Arrow.
-
+    (* The arrow arena contains the union of moves.
+       However, the polarity of the game to the left of the arrow is reversed.
+       The game starts to the right of the arrow.
+       Finally, inital moves to the right of the arrow enables the ones to the left.
+     *)
     Definition Arrow_Arena (A1 A2: Arena): Arena :=
       {|
         M := @M A1 + @M A2;
@@ -115,19 +157,19 @@ Section Arena_Constructs.
         enable := (@enable A1 +'' @enable A2) ∪ (inr_ I ->' inl_ I)
       |}.
 
-  End Arrow.
-
 End Arena_Constructs.
 
 Notation "'1'" := Unit_Arena.
 Infix "⊗" := Prod_Arena (at level 29, left associativity).
 Infix "↪" := Arrow_Arena (at level 11, left associativity).
 
-(* TODO: Define the isomorphism of Arenas up to which we work. Prove that 1 is indeed a unit for the product, 
+(* TODO: Define the isomorphism of Arenas up to which we work.
+   Prove that 1 is indeed a unit for the product and arrow. 
  *)
 
 Section Arena_Examples.
 
+  (* An arena representing the type of natural numbers *)
   Inductive Nat_enable: unit + nat -> unit + nat -> Prop :=
   | Nat_E: forall n, Nat_enable (inl tt) (inr n).
 
@@ -139,6 +181,5 @@ Section Arena_Examples.
       Nat_enable
     ⟩.
 
-
-
 End Arena_Examples.
+
