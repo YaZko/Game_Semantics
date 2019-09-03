@@ -204,6 +204,7 @@ Section Plays.
   Inductive prefix {A: Type}: relation (list A) :=
   | Nil_Prefix: forall l, prefix [] l
   | Cons_Prefix: forall l x l', prefix l l' -> prefix (x :: l) (x :: l').
+  Hint Constructors prefix.
   Infix "⊑" := prefix (at level 40).
 
   Infix "∈" := In (at level 40).
@@ -273,12 +274,88 @@ Section Plays.
       strategy_from_next_move next (snoc p (m,a))
   | O_move: forall p m a,
       O m ->
+      strategy_from_next_move next p ->
       play (snoc p (m,a)) ->
       strategy_from_next_move next (snoc p (m,a)).
+  Hint Constructors strategy_from_next_move.
+
+  Lemma snoc_not_nil_l: forall {A: Type} (xs: list A) x, [] = snoc xs x -> False.
+  Proof.
+    intros ? xs ? abs; destruct xs; inv abs.
+  Qed.
+
+  Lemma snoc_not_nil_r: forall {A: Type} (xs: list A) x, snoc xs x = [] -> False.
+  Proof.
+    intros ? xs ? abs; destruct xs; inv abs.
+  Qed.
+  Hint Resolve snoc_not_nil_l snoc_not_nil_r.
+
+  Lemma snoc_inj : forall {A: Type} (xs ys: list A) x y
+      (EQ: snoc xs x = snoc ys y),
+      xs = ys /\ x = y.
+  Proof.
+    induction xs as [| x' xs IH]; cbn; intros.
+    - destruct ys as [| ys y']; [inv EQ; auto |].
+      inv EQ.
+      exfalso; eauto.
+    - destruct ys as [| ys y']; eauto; cbn in *.
+      + destruct xs; inv EQ; exfalso; eauto. 
+      + inv EQ; edestruct IH; eauto; subst; auto.
+  Qed.
+
+  Ltac snoc_inv H :=
+    apply snoc_inj in H; destruct H; subst; clear H.
+
+  Lemma snoc_inv: forall {X: Type} (xs: list X),
+      xs = [] \/ exists xs' x, xs = snoc xs' x.
+  Proof.
+    induction xs as [| x xs IH] using rev_ind; cbn; eauto.
+    right; destruct IH as [-> | (? & ? & ->)].
+    exists []; eexists; reflexivity. 
+    do 2 eexists; reflexivity. 
+  Qed.
+
+  Lemma nil_is_play: play [].
+  Proof.
+    split; intros.
+    - inv H; exfalso; eauto.
+    - inv H; exfalso; eauto.
+  Qed.
+  Hint Resolve nil_is_play.
+
+  Ltac destruct_snoc xs :=
+    generalize (snoc_inv xs); intros [-> | (? & ? & ->)]. 
+
+  Lemma prefix_snoc: forall {X: Type} (xs xs': list X) x,
+      xs' ⊑ snoc xs x ->
+      xs' = snoc xs x \/ xs' ⊑ xs.
+  Proof.
+    induction xs as [| xs x' IH]; cbn; intros xs' x PRE.
+    - inv PRE; eauto.
+      inv H1; eauto.
+    - destruct xs'; auto.
+      inv PRE.
+      edestruct IH; eauto.
+      subst; eauto.
+  Qed.
 
   Lemma strategy_from_next_move_wf:
     forall next, next_move_wf next ->
             strategy_wf (strategy_from_next_move next).
-  Admitted.
+  Proof.
+    intros next nextWF; split.
+    - induction p as [| [m a] p IH] using rev_ind; auto.
+      intros ?.
+      inv H.
+      + exfalso; eauto. 
+      + apply nextWF; auto.
+        apply snoc_inj in H0; destruct H0; subst; auto.
+      + apply snoc_inj in H0; destruct H0; subst; auto.
+    - intros p p' strat; revert p'; induction strat; intros p' prefix.
+      + inv prefix; auto.
+      + apply prefix_snoc in prefix; destruct prefix as [-> | ?]; auto.
+      + apply prefix_snoc in prefix; destruct prefix as [-> | ?]; auto.
+    - intros p m strat; revert m; induction strat; intros [] PLAY HO; auto.
+  Qed.
 
 End Plays.
