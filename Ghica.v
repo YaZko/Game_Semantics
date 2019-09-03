@@ -2,8 +2,9 @@ From Games Require Import
      Utils.
 
 From Coq Require Import
+     List
      Relations.
-
+Import ListNotations.
 (**
    We now implement "The far side of the cube" as described by Dan R. Ghica.
    It is stated as being the simplest traditional game semantics in the sense
@@ -183,3 +184,101 @@ Section Arena_Examples.
 
 End Arena_Examples.
 
+Section Plays.
+
+  Context {A: Arena}.
+
+  Definition pointer: Type := M * nat.
+
+  (* (* List of names of pointers. *)
+  (*    We probably want at least a decidable equality upon it. *)
+  (*  *) *)
+  (* Variable N: Type. *)
+
+  (* (* A pointer is a move carrying the name of the pointer that justifies it, as *)
+  (* well as a fresh name for itself *) *)
+  (* Definition pointer: Type := M * N * N. *)
+
+  Definition pointer_sequence := list pointer.
+
+  Inductive prefix {A: Type}: relation (list A) :=
+  | Nil_Prefix: forall l, prefix [] l
+  | Cons_Prefix: forall l x l', prefix l l' -> prefix (x :: l) (x :: l').
+  Infix "⊑" := prefix (at level 40).
+
+  Infix "∈" := In (at level 40).
+
+  Inductive included {A: Type}: relation (list A) :=
+  | Nil_Included: forall l, included [] l
+  | Cons_Included: forall l x y l', included l l' -> included (x :: l) (y :: l')
+  | Prefix_Included: forall l l', prefix l l' -> included l l'.
+  Infix "⊆" := included (at level 40).
+
+  (* TODO: think about how to implement this pointer stuff, might want to use views *)
+  Inductive snoc_view {A: Type}: list A -> Type :=
+  | Nil: snoc_view nil
+  | Snoc: forall xs x, snoc_view (xs ++ [x]).
+
+  Fixpoint view {X: Type} (xs: list X): snoc_view xs :=
+    match xs with
+    | [] => Nil
+    | x :: xs =>
+      match view xs with
+      | Nil => Snoc [] x
+      | Snoc ys y => Snoc (x::ys) y
+      end
+    end.
+
+  Definition snoc {A: Type} (l: list A) a: list A := l ++ [a].
+
+  (* Definition pointer_sequence_Wf (p: pointer_sequence): Prop := *)
+  (*   forall q m a b m' a' b', snoc q (m,a,b) ⊑ p -> [(m',a',b')] ⊆ q -> b <> a' /\ b <> b'. *)
+
+  Notation "x [[ n ]]" := (nth_error x n) (at level 12).
+
+  (* A play is a pointer_sequence such that the first pointer is an initial
+     move, and every subsequent pointer is such that its move is indeed enabled
+     by the pointed justifying move *)
+  Record play (p: pointer_sequence): Prop :=
+    {
+      play_justifies: forall p' (m: M) (a: nat),
+        snoc p' (m,a) ⊑ p -> p' <> [] ->
+        exists q b, Q q /\ p'[[a]] = Some (q,b) /\ q ⊢ m;
+
+      play_init: forall (q: M) (a: nat), [(q,a)] ⊑ p -> I q
+    }.
+
+  Definition strategy := pointer_sequence -> Prop.
+
+  (* A strategy is a set of plays that is closed both by prefixed and by legal O-moves *)
+  (* Note: traditional presentations only contain the even-lengthed ones contained here *)
+  Record strategy_wf (s: strategy): Prop :=
+    {
+      are_plays: forall p, s p -> play p;
+      prefix_closed: forall p p', s p -> p' ⊑ p -> s p';
+      Oclosed: forall p m, s p -> play (snoc p m) -> O (fst m) -> s (snoc p m)
+    }.
+
+  (* Alternatively, strategies can be defined by a next move function *)
+  Definition next_move := pointer_sequence -> (pointer -> Prop).
+
+  Definition next_move_wf (s: next_move): Prop :=
+    forall p m a, play p -> s p (m,a) -> play (snoc p (m,a)).
+
+  Inductive strategy_from_next_move (next: next_move): strategy :=
+  | Empty_play: strategy_from_next_move next []
+  | P_move: forall p m a,
+      strategy_from_next_move next p ->
+      next p (m,a) ->
+      strategy_from_next_move next (snoc p (m,a))
+  | O_move: forall p m a,
+      O m ->
+      play (snoc p (m,a)) ->
+      strategy_from_next_move next (snoc p (m,a)).
+
+  Lemma strategy_from_next_move_wf:
+    forall next, next_move_wf next ->
+            strategy_wf (strategy_from_next_move next).
+  Admitted.
+
+End Plays.
