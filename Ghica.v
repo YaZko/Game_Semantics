@@ -5,6 +5,7 @@ From Coq Require Import
      List
      Relations.
 Import ListNotations.
+
 (**
    We now implement "The far side of the cube" as described by Dan R. Ghica.
    It is stated as being the simplest traditional game semantics in the sense
@@ -15,7 +16,6 @@ Import ListNotations.
    to model various programming constructs.
    This approach is referred to as "Abramsky's Cube".
  *)
-
 
 Section Arena.
 
@@ -65,55 +65,6 @@ End Arena.
 Infix "⊢" := enable (at level 50).
 Notation "⟨ M , Q , O , I , R ⟩" := (Build_Arena M Q O I R). 
 
-Section Relations.
-
-  (**
-     Utilities to manipulates predicates and relations.
-     Should eventually be moved somewhere else.
-   *)
-  Section Pred.
-    
-    Definition TT {A: Type}: A -> Prop := fun _ => True.
-    Definition FF {A: Type}: A -> Prop := fun _ => False.
-
-    Inductive Sum_Pred {A B: Type} (P1: A -> Prop) (P2: B -> Prop): (A + B) -> Prop :=
-    | Sum_Pred_L: forall a, P1 a -> Sum_Pred P1 P2 (inl a) 
-    | Sum_Pred_R: forall b, P2 b -> Sum_Pred P1 P2 (inr b).
-
-    Inductive Inl_Pred {A B: Type} (P1: A -> Prop): (A + B) -> Prop :=
-    | Inl_PredC: forall a, P1 a -> Inl_Pred P1 (inl a).
-
-    Inductive Inr_Pred {A B: Type} (P2: B -> Prop): (A + B) -> Prop :=
-    | Inr_PredC: forall b, P2 b -> Inr_Pred P2 (inr b).
-  End Pred.
-
-  Section Rel.
-
-    Definition TT' {A: Type}: relation A := fun _ _ => True.
-    Definition FF' {A: Type}: relation A := fun _ _ => False.
-
-    Inductive Prod_Pred_to_Rel {A B: Type} (P1: A -> Prop) (P2: B -> Prop): A -> B -> Prop :=
-    | Prod_PredC: forall a b, P1 a -> P2 b -> Prod_Pred_to_Rel P1 P2 a b.
-
-    Inductive Sum_Rel {A B: Type} (R1: relation A) (R2: relation B): relation (A + B) :=
-    | Sum_Rel_L: forall a a', R1 a a' -> Sum_Rel R1 R2 (inl a) (inl a')
-    | Sum_Rel_R: forall b b', R2 b b' -> Sum_Rel R1 R2 (inr b) (inr b').
-
-    Inductive Join_Rel {A: Type} (R1 R2: relation A): relation A :=
-    | Join_Rel_L: forall a a', R1 a a' -> Join_Rel R1 R2 a a'
-    | Join_Rel_R: forall b b', R2 b b' -> Join_Rel R1 R2 b b'.
-
-  End Rel.
-
-End Relations.
-
-Infix "+'" := Sum_Pred (at level 40).
-Notation "'inl_' P" := (Inl_Pred P) (at level 5).
-Notation "'inr_' P" := (Inr_Pred P) (at level 5).
-Infix "->'" := (Prod_Pred_to_Rel) (at level 40).
-Infix "+''" := Sum_Rel (at level 40).
-Infix "∪" := Join_Rel (at level 60).
-
 Inductive void: Type :=.
 
 Section Arena_Constructs.
@@ -160,29 +111,13 @@ Section Arena_Constructs.
 
 End Arena_Constructs.
 
-Notation "'1'" := Unit_Arena.
+Notation "'Unit'" := Unit_Arena.
 Infix "⊗" := Prod_Arena (at level 29, left associativity).
-Infix "↪" := Arrow_Arena (at level 11, left associativity).
+Infix "↪" := Arrow_Arena (at level 11, right associativity).
 
 (* TODO: Define the isomorphism of Arenas up to which we work.
    Prove that 1 is indeed a unit for the product and arrow. 
  *)
-
-Section Arena_Examples.
-
-  (* An arena representing the type of natural numbers *)
-  Inductive Nat_enable: unit + nat -> unit + nat -> Prop :=
-  | Nat_E: forall n, Nat_enable (inl tt) (inr n).
-
-  Definition Nat_Arena: Arena :=
-    ⟨ unit + nat,
-      inl_ TT,
-      inl_ TT,
-      inl_ TT,
-      Nat_enable
-    ⟩.
-
-End Arena_Examples.
 
 Section Plays.
 
@@ -190,52 +125,7 @@ Section Plays.
 
   Definition pointer: Type := M * nat.
 
-  (* (* List of names of pointers. *)
-  (*    We probably want at least a decidable equality upon it. *)
-  (*  *) *)
-  (* Variable N: Type. *)
-
-  (* (* A pointer is a move carrying the name of the pointer that justifies it, as *)
-  (* well as a fresh name for itself *) *)
-  (* Definition pointer: Type := M * N * N. *)
-
   Definition pointer_sequence := list pointer.
-
-  Inductive prefix {A: Type}: relation (list A) :=
-  | Nil_Prefix: forall l, prefix [] l
-  | Cons_Prefix: forall l x l', prefix l l' -> prefix (x :: l) (x :: l').
-  Hint Constructors prefix.
-  Infix "⊑" := prefix (at level 40).
-
-  Infix "∈" := In (at level 40).
-
-  Inductive included {A: Type}: relation (list A) :=
-  | Nil_Included: forall l, included [] l
-  | Cons_Included: forall l x y l', included l l' -> included (x :: l) (y :: l')
-  | Prefix_Included: forall l l', prefix l l' -> included l l'.
-  Infix "⊆" := included (at level 40).
-
-  (* TODO: think about how to implement this pointer stuff, might want to use views *)
-  Inductive snoc_view {A: Type}: list A -> Type :=
-  | Nil: snoc_view nil
-  | Snoc: forall xs x, snoc_view (xs ++ [x]).
-
-  Fixpoint view {X: Type} (xs: list X): snoc_view xs :=
-    match xs with
-    | [] => Nil
-    | x :: xs =>
-      match view xs with
-      | Nil => Snoc [] x
-      | Snoc ys y => Snoc (x::ys) y
-      end
-    end.
-
-  Definition snoc {A: Type} (l: list A) a: list A := l ++ [a].
-
-  (* Definition pointer_sequence_Wf (p: pointer_sequence): Prop := *)
-  (*   forall q m a b m' a' b', snoc q (m,a,b) ⊑ p -> [(m',a',b')] ⊆ q -> b <> a' /\ b <> b'. *)
-
-  Notation "x [[ n ]]" := (nth_error x n) (at level 12).
 
   (* A play is a pointer_sequence such that the first pointer is an initial
      move, and every subsequent pointer is such that its move is indeed enabled
@@ -279,42 +169,6 @@ Section Plays.
       strategy_from_next_move next (snoc p (m,a)).
   Hint Constructors strategy_from_next_move.
 
-  Lemma snoc_not_nil_l: forall {A: Type} (xs: list A) x, [] = snoc xs x -> False.
-  Proof.
-    intros ? xs ? abs; destruct xs; inv abs.
-  Qed.
-
-  Lemma snoc_not_nil_r: forall {A: Type} (xs: list A) x, snoc xs x = [] -> False.
-  Proof.
-    intros ? xs ? abs; destruct xs; inv abs.
-  Qed.
-  Hint Resolve snoc_not_nil_l snoc_not_nil_r.
-
-  Lemma snoc_inj : forall {A: Type} (xs ys: list A) x y
-      (EQ: snoc xs x = snoc ys y),
-      xs = ys /\ x = y.
-  Proof.
-    induction xs as [| x' xs IH]; cbn; intros.
-    - destruct ys as [| ys y']; [inv EQ; auto |].
-      inv EQ.
-      exfalso; eauto.
-    - destruct ys as [| ys y']; eauto; cbn in *.
-      + destruct xs; inv EQ; exfalso; eauto. 
-      + inv EQ; edestruct IH; eauto; subst; auto.
-  Qed.
-
-  Ltac snoc_inv H :=
-    apply snoc_inj in H; destruct H; subst; clear H.
-
-  Lemma snoc_inv: forall {X: Type} (xs: list X),
-      xs = [] \/ exists xs' x, xs = snoc xs' x.
-  Proof.
-    induction xs as [| x xs IH] using rev_ind; cbn; eauto.
-    right; destruct IH as [-> | (? & ? & ->)].
-    exists []; eexists; reflexivity. 
-    do 2 eexists; reflexivity. 
-  Qed.
-
   Lemma nil_is_play: play [].
   Proof.
     split; intros.
@@ -322,22 +176,6 @@ Section Plays.
     - inv H; exfalso; eauto.
   Qed.
   Hint Resolve nil_is_play.
-
-  Ltac destruct_snoc xs :=
-    generalize (snoc_inv xs); intros [-> | (? & ? & ->)]. 
-
-  Lemma prefix_snoc: forall {X: Type} (xs xs': list X) x,
-      xs' ⊑ snoc xs x ->
-      xs' = snoc xs x \/ xs' ⊑ xs.
-  Proof.
-    induction xs as [| xs x' IH]; cbn; intros xs' x PRE.
-    - inv PRE; eauto.
-      inv H1; eauto.
-    - destruct xs'; auto.
-      inv PRE.
-      edestruct IH; eauto.
-      subst; eauto.
-  Qed.
 
   Lemma strategy_from_next_move_wf:
     forall next, next_move_wf next ->
@@ -347,7 +185,7 @@ Section Plays.
     - induction p as [| [m a] p IH] using rev_ind; auto.
       intros ?.
       inv H.
-      + exfalso; eauto. 
+      + exfalso; eauto.
       + apply nextWF; auto.
         apply snoc_inj in H0; destruct H0; subst; auto.
       + apply snoc_inj in H0; destruct H0; subst; auto.
@@ -357,5 +195,21 @@ Section Plays.
       + apply prefix_snoc in prefix; destruct prefix as [-> | ?]; auto.
     - intros p m strat; revert m; induction strat; intros [] PLAY HO; auto.
   Qed.
+
+  (* Least strategy spanned by a set of plays.
+     TODO: think about this for a more interesting definition.
+   *)
+  Record least_strat (generators: pointer_sequence -> Prop) (s: strategy): Prop :=
+    {
+      generators_plays: forall p, generators p -> play p;
+      s_strategy: strategy_wf s;
+      s_least_strategy: forall s', strategy_wf s' -> generators ⊆ s' -> s ⊆ s'
+    }.
+
+  Fixpoint deletion (p: pointer_sequence): pointer_sequence :=
+    match view p with
+    | Nil => []
+    | Snoc x p => []
+    end.
 
 End Plays.
