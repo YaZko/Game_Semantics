@@ -119,6 +119,111 @@ Infix "↪" := Arrow_Arena (at level 11, right associativity).
    Prove that 1 is indeed a unit for the product and arrow. 
  *)
 
+Definition bijection {A B : Type} (f : A -> B) :=
+  forall x y, x = y <-> f x = f y. 
+
+Definition arena_isomorphism {A1 A2 : Arena} (f : @M A1 -> @M A2) : Prop :=
+  bijection f /\ forall m n, (@Q A1 m <-> @Q A2 (f m)) /\ (@O A1 m <-> @O A2 (f m)) /\
+                 (@I A1 m <-> @I A2 (f m)) /\ (@enable A1 m n <-> @enable A2 (f m) (f n)).
+
+Definition isol {A : Arena} (m : void + M) : M :=
+  match m with
+  | inl v => match v return M with end
+  | inr m' => m' end.
+
+Definition isor {A : Arena} (m : M + void) : M :=
+  match m with
+  | inl m' => m'
+  | inr v => match v return M with end
+  end.
+
+
+Lemma unit_left_id_product : forall (A : Arena), exists (f : void + M -> M),
+      @arena_isomorphism (Prod_Arena Unit A) A f.
+  Proof.
+    intro A. exists isol. unfold arena_isomorphism, bijection. split.
+    - intros. split; intros; subst; auto. destruct x; destruct y; 
+       unfold isol in *; simpl in *; try contradiction. subst. auto.
+    - intros. repeat split; intros;
+      try (destruct m; try contradiction; simpl in *; inv H; try contradiction; auto);
+      try (destruct m; try contradiction; simpl in *; constructor; assumption).
+      destruct m; destruct n; try contradiction. simpl in *. constructor. assumption.
+  Qed.
+
+Lemma unit_right_id_product : forall (A : Arena), exists (f : M + void -> M),
+        @arena_isomorphism (Prod_Arena A Unit) A f.
+  Proof.
+    intros A. exists isor. unfold arena_isomorphism, bijection. split.
+    - intros. split; intros; subst; auto. destruct x; destruct y; 
+       unfold isor in *; simpl in *; try contradiction. subst. auto.
+    - intros. repeat split; intros;
+      try (destruct m; try contradiction; simpl in *; inv H; try contradiction; auto);
+      try (destruct m; try contradiction; simpl in *; constructor; assumption).
+      destruct m; destruct n; try contradiction. simpl in *. constructor. assumption.
+  Qed.
+
+Lemma unit_left_id_exp : forall (A : Arena), exists (f : void + M -> M),
+        @arena_isomorphism (Arrow_Arena Unit A) A f.
+  Proof.
+    intros A. exists isol. unfold arena_isomorphism, bijection. split.
+    - intros. split; intros; subst; auto. destruct x; destruct y; 
+       unfold isor in *; simpl in *; try contradiction. subst. auto.
+    - intros. repeat split; intros;
+      try (destruct m; try contradiction; simpl in *; inv H; try contradiction; auto);
+      try (destruct m; try contradiction; simpl in *; constructor; assumption).
+      + inv H0. simpl. assumption.
+      + inv H0. inv H1. contradiction.
+      + destruct m; destruct n; try contradiction. simpl in *. repeat constructor. auto.
+  Qed.
+
+Definition iso_curry {A B C : Arena} (m : @M A + (@M B + @M C)) : (@M A + @M B) + @M C :=
+  match m with
+  | inl a => inl (inl a)
+  | inr bc => 
+    match  bc with
+    | inl b => inl (inr b)
+    | inr c => inr c
+    end
+  end.
+
+(** could probably parts of automate this  *)
+Lemma currying : forall (A B C : Arena), exists (f : @M A + (@M B + @M C) -> (@M A + @M B) + @M C),
+                 @arena_isomorphism  (Arrow_Arena A (Arrow_Arena B C)) (Arrow_Arena (Prod_Arena A B) C) f.
+  Proof.
+    intros. exists iso_curry. unfold arena_isomorphism, bijection. split.
+    - intros. split; intros.
+      + subst. auto.
+      + destruct x; destruct y; simpl in *; auto; try discriminate.
+        * injection H. intros. subst. auto.
+        * destruct m0; try discriminate.
+        * destruct m; try discriminate.
+        * destruct m; destruct m0; try discriminate;
+            try (injection H; intros; subst; auto).
+   - intros. repeat split; intros.
+     + destruct m; simpl in *.
+       * inv H. repeat constructor. auto.
+       * inv H. inv H1; repeat constructor; auto.
+     + destruct m; simpl in *; inv H; try (inv H1).
+       * repeat constructor. auto.
+       * destruct m; simpl in *; repeat constructor.
+         -- injection H0. intros. discriminate.
+         -- discriminate.
+       * destruct m; simpl in *; repeat constructor.
+         -- injection H0. intros. subst. auto.
+         -- discriminate.
+       * destruct m; try discriminate. injection H0. intros. subst. repeat constructor. auto.
+     + destruct m; simpl in *. (** running into issues with the opponent construction ~OA + ~OB vs ~(OA + OB) ?  *)
+       * inv H. constructor. unfold P in *. admit.
+       * inv H. inv H1.
+         -- constructor. unfold P in *. admit.
+         -- constructor. auto.
+     + destruct m; simpl in *.
+       * inv H. constructor. auto. admit.
+       * destruct m; simpl in *.
+         -- constructor. inv H. constructor.
+Admitted.       
+
+
 Section Plays.
 
   Context {A: Arena}.
@@ -138,6 +243,7 @@ Section Plays.
 
       play_init: forall (q: M) (a: nat), [(q,a)] ⊑ p -> I q
     }.
+
 
   Definition strategy := pointer_sequence -> Prop.
 
@@ -211,5 +317,17 @@ Section Plays.
     | Nil => []
     | Snoc x p => []
     end.
+
+  Definition dec_above_or_eq (n : nat) (f : nat -> nat) :=
+    fun m => if Nat.ltb n m then f m - 1 else f m.
+
+  Inductive delete_rel : pointer_sequence -> pointer_sequence -> (M -> Prop) -> (nat -> nat) -> Prop := 
+    | del_nil (P : M -> Prop) : delete_rel nil nil P (fun x => x)
+    | del_snoc_in (p p' : pointer_sequence) (P : M -> Prop) (m : M) (Hm : P m) (n : nat) (f : nat -> nat)
+                  (Hpp' :delete_rel p' p P f) : delete_rel p' (snoc p (m,n)) P (dec_above_or_eq (length p') f)
+    | del_snoc_out (p p' : pointer_sequence) (P : M -> Prop) (m : M) (Hm : ~ P m) (n : nat) (f : nat -> nat)
+                   (Hpp' : delete_rel p' p P f) : delete_rel (snoc p' (m,n)) (snoc p (m,n)) P f
+.
+
 
 End Plays.
