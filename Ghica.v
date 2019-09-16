@@ -284,6 +284,7 @@ Section Plays.
       play_init: forall (q: M) (a: nat), [(q,a)] ⊑ p -> I q
     }.
 
+  (*Lemma play_prefix_closed*)
 
   Definition strategy (A : Arena) := pointer_sequence M -> Prop.
 
@@ -398,6 +399,23 @@ Section Plays.
       + simpl in *. auto.
       + simpl in *. constructor; auto.
   Qed.
+
+
+  Lemma delete_none_in_X : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
+      Forall (fun x => X (fst x) = false) (delete A p X).
+  Proof.
+    intros.
+    enough (Forall (fun m => X m = false) (map fst (delete A0 p X))).
+    - induction (delete A0 p X); auto. inv H. constructor; auto.
+    - rewrite <- delete_fun_delete_same_m.
+      induction p; simpl; auto. destruct a as [m n]. destruct (delete_fun A0 p X) as [p' f] eqn : Heq.
+      destruct (X m) eqn : Hx; simpl in *; auto.
+  Qed.
+      
+  Lemma delete_preserves_play : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
+      play A p -> play A (delete A p X).
+  Proof.
+    intros. induction p; auto.
 
 (**Not sure this preserves play requirements*)
   Inductive delete_rel (A : Arena): pointer_sequence M -> pointer_sequence M -> (M -> Prop) -> (nat -> nat) -> Prop := 
