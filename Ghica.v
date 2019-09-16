@@ -109,6 +109,17 @@ Section Arena_Constructs.
         enable := (@enable A1 +'' @enable A2) ∪ (inr_ I ->' inl_ I)
       |}.
 
+
+    Definition Sub_Arena (A : Arena) (P : M -> Prop) :=
+      {|
+        M := {m : M | P m};
+        Q := fun m => match m with exist _ m' _  => Q m' end;
+        O := fun m => match m with exist _ m' _ => O m' end;
+        I := fun m => match m with exist _ m' _ => I m' end;
+        enable := fun m n => match m with exist _ m' _  => match n with exist _ n' _  => enable m' n' end end;
+      
+      |}.
+
 End Arena_Constructs.
 
 Notation "'Unit'" := Unit_Arena.
@@ -125,6 +136,35 @@ Definition bijection {A B : Type} (f : A -> B) :=
 Definition arena_isomorphism {A1 A2 : Arena} (f : @M A1 -> @M A2) : Prop :=
   bijection f /\ forall m n, (@Q A1 m <-> @Q A2 (f m)) /\ (@O A1 m <-> @O A2 (f m)) /\
                  (@I A1 m <-> @I A2 (f m)) /\ (@enable A1 m n <-> @enable A2 (f m) (f n)).
+
+Definition isomorphic (A1 A2 : Arena) : Prop := exists f, @arena_isomorphism A1 A2 f.
+
+Lemma iso_reflexive : forall A, isomorphic A A.
+Proof.
+  intros. unfold isomorphic, arena_isomorphism. exists (fun x => x). 
+  split.
+  - unfold bijection. intros. split; auto.
+  - intros. repeat split; auto.
+Qed.
+
+Lemma iso_symmetric : forall A1 A2, isomorphic A1 A2 -> isomorphic A2 A1.
+Proof.
+  intros. unfold isomorphic, arena_isomorphism in *. destruct H as [f [Hbi Hiso] ].
+(** is yielding an inverse function from a bijection constructive?  *)
+Admitted.
+  
+
+
+
+Lemma iso_transitive : forall A1 A2 A3, isomorphic A1 A2 -> isomorphic A2 A3 -> isomorphic A1 A3.
+  intros. unfold isomorphic, arena_isomorphism.
+  destruct H as [f12 [Hbi12 Hiso12] ]. destruct H0 as [f23 [Hbi23 Hiso23] ].
+  exists (fun x => f23 (f12 x) ). split; intros; repeat split;
+  try (intros; specialize (Hiso12 m n); specialize (Hiso23 (f12 m) (f12 n)); tauto).
+  - intros. unfold bijection in *. apply Hbi12 in H. apply Hbi23 in H. auto.
+  - intros. unfold bijection in *. apply Hbi23 in H. apply Hbi12 in H. auto.
+Qed.
+
 
 Definition isol {A : Arena} (m : void + M) : M :=
   match m with
@@ -318,16 +358,72 @@ Section Plays.
     | Snoc x p => []
     end.
 
-  Definition dec_above_or_eq (n : nat) (f : nat -> nat) :=
+  Definition decr_above_or_eq (n : nat) (f : nat -> nat) :=
     fun m => if Nat.ltb n m then f m - 1 else f m.
 
+  Fixpoint delete_fun (p : pointer_sequence) (X : M -> bool) : pointer_sequence * (nat -> nat) :=
+    match  p with
+    | [] => ([], fun x => x)
+    | x :: p => let (m,n) := x in 
+                  let (p',f) := delete_fun p X in
+                  if X m 
+                  then (p', decr_above_or_eq (length p + 1) f )
+                  else (x :: p',f) end.
+(**not sure this preserves play requirements*)
   Inductive delete_rel : pointer_sequence -> pointer_sequence -> (M -> Prop) -> (nat -> nat) -> Prop := 
     | del_nil (P : M -> Prop) : delete_rel nil nil P (fun x => x)
     | del_snoc_in (p p' : pointer_sequence) (P : M -> Prop) (m : M) (Hm : P m) (n : nat) (f : nat -> nat)
-                  (Hpp' :delete_rel p' p P f) : delete_rel p' (snoc p (m,n)) P (dec_above_or_eq (length p') f)
+                  (Hpp' :delete_rel p' p P f) : delete_rel p' (snoc p (m,n)) P (decr_above_or_eq (length p') f)
     | del_snoc_out (p p' : pointer_sequence) (P : M -> Prop) (m : M) (Hm : ~ P m) (n : nat) (f : nat -> nat)
                    (Hpp' : delete_rel p' p P f) : delete_rel (snoc p' (m,n)) (snoc p (m,n)) P f
 .
 
 
+  
+  Definition name_set := nat -> bool.
+  Definition empty : name_set := fun x => false.
+  Definition add_elem x (s : name_set) := fun y => if Nat.eqb x y then true else s y.
+  Definition contains (s : name_set) x := s x.
+  Definition union (s t : name_set) := fun x => orb (s x)  (t x).
+
+  Fixpoint hered_just_fun (p : pointer_sequence) (X : M -> bool) : pointer_sequence * name_set :=
+    match p with
+    | [] => ([], empty)
+    | x :: p => let (m,n) := x in
+                let (p', s) := hered_just_fun p X in
+                if X m
+                then (x :: p', add_elem (length p) s)
+                else (p',s)
+    end.
+
+  Inductive hered_just_rel : pointer_sequence -> pointer_sequence -> (M -> Prop) -> (nat -> Prop) -> Prop :=
+    | hered_nil (P : M -> Prop) : hered_just_rel [] [] P (fun x => False)  
+    | hered_snoc_in (p p' : pointer_sequence) (P : M -> Prop) (m : M) (Hm : P m) (n : nat) (S : nat -> Prop)
+                    (Hpp' : hered_just_rel p' p P S) : hered_just_rel (snoc p' (m,n)) (snoc p (m,n)) P 
+                                                                      (fun x => S x \/ x = length p)
+    | hered_snoc_out (p p' : pointer_sequence) (P : M -> Prop) (m : M) (Hm : ~ P m) (n : nat) (S : nat -> Prop)
+                    (Hpp' : hered_just_rel p' p P S) : hered_just_rel p' (snoc p (m,n)) P S
+  .
+
+
 End Plays.
+
+Lemma Forall_tail : forall (A : Type) (P : A -> Prop) (a : A) (l : list A), Forall P (a :: l) -> (P a /\ Forall P l).
+Proof.
+  intros. inv H; auto.
+Qed.
+
+Definition list_subset_project (A : Type) (P : A -> Prop) (l : list A) (Hl : Forall P l) : list {a : A | P a}.
+  induction l.
+  - apply ([]).
+  - apply Forall_tail in Hl as [Ha Ht]. remember (exist P a Ha). specialize (IHl Ht).
+    apply (s :: IHl).
+Defined. 
+
+Lemma preserve_elem : forall (A : Type) (P : A-> Prop) (l : list A) (Hl : Forall P l),
+    map (fun x => match x with exist _ a _ => a end) (list_subset_project A P l Hl) = l.
+Proof.
+  intros. induction l; auto. 
+  simpl.  destruct ( Forall_tail A0 P0 a l Hl). simpl. rewrite IHl. auto.
+Qed.
+ 
