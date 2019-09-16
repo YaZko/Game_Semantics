@@ -266,16 +266,16 @@ Admitted.
 
 Section Plays.
 
-  Context {A: Arena}.
+  (*Context {A: Arena}.*)
 
-  Definition pointer: Type := M * nat.
+  Definition pointer (M : Type) : Type := M * nat.
 
-  Definition pointer_sequence := list pointer.
+  Definition pointer_sequence (M : Type) := list (pointer M).
 
   (* A play is a pointer_sequence such that the first pointer is an initial
      move, and every subsequent pointer is such that its move is indeed enabled
      by the pointed justifying move *)
-  Record play (p: pointer_sequence): Prop :=
+  Record play (A : Arena) (p: pointer_sequence M): Prop :=
     {
       play_justifies: forall p' (m: M) (a: nat),
         snoc p' (m,a) ⊑ p -> p' <> [] ->
@@ -285,37 +285,37 @@ Section Plays.
     }.
 
 
-  Definition strategy := pointer_sequence -> Prop.
+  Definition strategy (A : Arena) := pointer_sequence M -> Prop.
 
   (* A strategy is a set of plays that is closed both by prefixed and by legal O-moves *)
   (* Note: traditional presentations only contain the even-lengthed ones contained here *)
-  Record strategy_wf (s: strategy): Prop :=
+  Record strategy_wf (A : Arena) (s: strategy A): Prop :=
     {
-      are_plays: forall p, s p -> play p;
+      are_plays: forall p, s p -> play A p;
       prefix_closed: forall p p', s p -> p' ⊑ p -> s p';
-      Oclosed: forall p m, s p -> play (snoc p m) -> O (fst m) -> s (snoc p m)
+      Oclosed: forall p m, s p -> play A (snoc p m) -> O (fst m) -> s (snoc p m)
     }.
 
   (* Alternatively, strategies can be defined by a next move function *)
-  Definition next_move := pointer_sequence -> (pointer -> Prop).
+  Definition next_move (A : Arena) := pointer_sequence M -> (pointer M -> Prop).
 
-  Definition next_move_wf (s: next_move): Prop :=
-    forall p m a, play p -> s p (m,a) -> play (snoc p (m,a)).
+  Definition next_move_wf (A : Arena) (s: next_move A): Prop :=
+    forall p m a, play A p -> s p (m,a) -> play A (snoc p (m,a)).
 
-  Inductive strategy_from_next_move (next: next_move): strategy :=
-  | Empty_play: strategy_from_next_move next []
+  Inductive strategy_from_next_move (A : Arena) (next: next_move A): strategy A :=
+  | Empty_play: strategy_from_next_move A next []
   | P_move: forall p m a,
-      strategy_from_next_move next p ->
+      strategy_from_next_move A next p ->
       next p (m,a) ->
-      strategy_from_next_move next (snoc p (m,a))
+      strategy_from_next_move A next (snoc p (m,a))
   | O_move: forall p m a,
       O m ->
-      strategy_from_next_move next p ->
-      play (snoc p (m,a)) ->
-      strategy_from_next_move next (snoc p (m,a)).
+      strategy_from_next_move A next p ->
+      play A (snoc p (m,a)) ->
+      strategy_from_next_move A next (snoc p (m,a)).
   Hint Constructors strategy_from_next_move.
 
-  Lemma nil_is_play: play [].
+  Lemma nil_is_play: forall A, play A [].
   Proof.
     split; intros.
     - inv H; exfalso; eauto.
@@ -324,10 +324,10 @@ Section Plays.
   Hint Resolve nil_is_play.
 
   Lemma strategy_from_next_move_wf:
-    forall next, next_move_wf next ->
-            strategy_wf (strategy_from_next_move next).
+    forall A next, next_move_wf A next ->
+            strategy_wf A (strategy_from_next_move A next).
   Proof.
-    intros next nextWF; split.
+    intros A next nextWF; split.
     - induction p as [| [m a] p IH] using rev_ind; auto.
       intros ?.
       inv H.
@@ -345,14 +345,14 @@ Section Plays.
   (* Least strategy spanned by a set of plays.
      TODO: think about this for a more interesting definition.
    *)
-  Record least_strat (generators: pointer_sequence -> Prop) (s: strategy): Prop :=
+  Record least_strat (A : Arena) (generators: pointer_sequence M -> Prop) (s: strategy A): Prop :=
     {
-      generators_plays: forall p, generators p -> play p;
-      s_strategy: strategy_wf s;
-      s_least_strategy: forall s', strategy_wf s' -> generators ⊆ s' -> s ⊆ s'
+      generators_plays: forall p, generators p -> play A p;
+      s_strategy: strategy_wf A s;
+      s_least_strategy: forall s', strategy_wf A s' -> generators ⊆ s' -> s ⊆ s'
     }.
 
-  Fixpoint deletion (p: pointer_sequence): pointer_sequence :=
+  Fixpoint deletion (A : Arena) (p: pointer_sequence M): pointer_sequence M :=
     match view p with
     | Nil => []
     | Snoc x p => []
@@ -361,21 +361,23 @@ Section Plays.
   Definition decr_above_or_eq (n : nat) (f : nat -> nat) :=
     fun m => if Nat.ltb n m then f m - 1 else f m.
 
-  Fixpoint delete_fun (p : pointer_sequence) (X : M -> bool) : pointer_sequence * (nat -> nat) :=
+  Fixpoint delete_fun (A : Arena) (p : pointer_sequence M) (X : M -> bool) : pointer_sequence M * (nat -> nat) :=
     match  p with
     | [] => ([], fun x => x)
     | x :: p => let (m,n) := x in 
-                  let (p',f) := delete_fun p X in
+                  let (p',f) := delete_fun A p X in
                   if X m 
                   then (p', decr_above_or_eq (length p + 1) f )
                   else (x :: p',f) end.
+
+
 (**not sure this preserves play requirements*)
-  Inductive delete_rel : pointer_sequence -> pointer_sequence -> (M -> Prop) -> (nat -> nat) -> Prop := 
-    | del_nil (P : M -> Prop) : delete_rel nil nil P (fun x => x)
-    | del_snoc_in (p p' : pointer_sequence) (P : M -> Prop) (m : M) (Hm : P m) (n : nat) (f : nat -> nat)
-                  (Hpp' :delete_rel p' p P f) : delete_rel p' (snoc p (m,n)) P (decr_above_or_eq (length p') f)
-    | del_snoc_out (p p' : pointer_sequence) (P : M -> Prop) (m : M) (Hm : ~ P m) (n : nat) (f : nat -> nat)
-                   (Hpp' : delete_rel p' p P f) : delete_rel (snoc p' (m,n)) (snoc p (m,n)) P f
+  Inductive delete_rel (A : Arena): pointer_sequence M -> pointer_sequence M -> (M -> Prop) -> (nat -> nat) -> Prop := 
+    | del_nil (P : M -> Prop) : delete_rel A nil nil P (fun x => x)
+    | del_snoc_in (p p' : pointer_sequence M) (P : M -> Prop) (m : M) (Hm : P m) (n : nat) (f : nat -> nat)
+                  (Hpp' :delete_rel A p' p P f) : delete_rel A p' (snoc p (m,n)) P (decr_above_or_eq (length p') f)
+    | del_snoc_out (p p' : pointer_sequence M) (P : M -> Prop) (m : M) (Hm : ~ P m) (n : nat) (f : nat -> nat)
+                   (Hpp' : delete_rel A p' p P f) : delete_rel A (snoc p' (m,n)) (snoc p (m,n)) P f
 .
 
 
@@ -386,23 +388,23 @@ Section Plays.
   Definition contains (s : name_set) x := s x.
   Definition union (s t : name_set) := fun x => orb (s x)  (t x).
 
-  Fixpoint hered_just_fun (p : pointer_sequence) (X : M -> bool) : pointer_sequence * name_set :=
+  Fixpoint hered_just_fun (A : Arena) (p : pointer_sequence M ) (X : M -> bool) : pointer_sequence M * name_set :=
     match p with
     | [] => ([], empty)
     | x :: p => let (m,n) := x in
-                let (p', s) := hered_just_fun p X in
+                let (p', s) := hered_just_fun A p X in
                 if X m
                 then (x :: p', add_elem (length p) s)
                 else (p',s)
     end.
 
-  Inductive hered_just_rel : pointer_sequence -> pointer_sequence -> (M -> Prop) -> (nat -> Prop) -> Prop :=
-    | hered_nil (P : M -> Prop) : hered_just_rel [] [] P (fun x => False)  
-    | hered_snoc_in (p p' : pointer_sequence) (P : M -> Prop) (m : M) (Hm : P m) (n : nat) (S : nat -> Prop)
-                    (Hpp' : hered_just_rel p' p P S) : hered_just_rel (snoc p' (m,n)) (snoc p (m,n)) P 
+  Inductive hered_just_rel (A : Arena) : pointer_sequence M -> pointer_sequence M -> (M -> Prop) -> (nat -> Prop) -> Prop :=
+    | hered_nil (P : M -> Prop) : hered_just_rel A [] [] P (fun x => False)  
+    | hered_snoc_in (p p' : pointer_sequence M ) (P : M -> Prop) (m : M) (Hm : P m) (n : nat) (S : nat -> Prop)
+                    (Hpp' : hered_just_rel A  p' p P S) : hered_just_rel A (snoc p' (m,n)) (snoc p (m,n)) P 
                                                                       (fun x => S x \/ x = length p)
-    | hered_snoc_out (p p' : pointer_sequence) (P : M -> Prop) (m : M) (Hm : ~ P m) (n : nat) (S : nat -> Prop)
-                    (Hpp' : hered_just_rel p' p P S) : hered_just_rel p' (snoc p (m,n)) P S
+    | hered_snoc_out (p p' : pointer_sequence M) (P : M -> Prop) (m : M) (Hm : ~ P m) (n : nat) (S : nat -> Prop)
+                    (Hpp' : hered_just_rel A p' p P S) : hered_just_rel A p' (snoc p (m,n)) P S
   .
 
 
