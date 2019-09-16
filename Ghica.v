@@ -362,7 +362,7 @@ Section Plays.
     fun m => if Nat.ltb n m then f m - 1 else f m.
 
   Fixpoint delete_fun (A : Arena) (p : pointer_sequence M) (X : M -> bool) : pointer_sequence M * (nat -> nat) :=
-    match  p with
+    match p with
     | [] => ([], fun x => x)
     | x :: p => let (m,n) := x in 
                   let (p',f) := delete_fun A p X in
@@ -370,8 +370,36 @@ Section Plays.
                   then (p', decr_above_or_eq (length p + 1) f )
                   else (x :: p',f) end.
 
+  Fixpoint delete (A : Arena) (p : pointer_sequence M) (X : M -> bool) : pointer_sequence M :=
+    let (p',f) := delete_fun A p X in
+    map (fun x => match x with pair m n => (m, f n) end) p'.
 
-(**not sure this preserves play requirements*)
+  Lemma delete_fun_delete_same_m : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
+      map fst (fst (delete_fun A p X)) = map fst (delete A p X).
+    Proof.
+      intros. induction p; auto.
+      simpl. destruct a eqn : Heqa. destruct (delete_fun A0 p X) eqn : Heqdel.
+      destruct (X m) eqn: Hm; simpl.
+      - simpl in *. clear Hm Heqa Heqdel IHp.
+        induction p0; auto. simpl. rewrite <- IHp0. destruct a0. simpl. auto.
+      -  clear Hm Heqa Heqdel IHp. enough (map fst p0 = map fst (map (fun x : M * nat => let (m0, n1) := x in (m0, n0 n1))
+          p0)). rewrite H. auto.
+         induction p0; auto. simpl. destruct a0. simpl. rewrite IHp0. auto.
+    Qed.
+
+
+  Lemma delete_fun_none_in_X : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
+     Forall (fun x => X (fst x) = false) (fst (delete_fun A p X)).
+  Proof.
+    intros. induction p.
+    - simpl. auto.
+    - simpl. destruct a as [m n]. destruct (delete_fun A0 p X) as [p' f] eqn : Heq.
+      destruct (X m) eqn : Hx.
+      + simpl in *. auto.
+      + simpl in *. constructor; auto.
+  Qed.
+
+(**Not sure this preserves play requirements*)
   Inductive delete_rel (A : Arena): pointer_sequence M -> pointer_sequence M -> (M -> Prop) -> (nat -> nat) -> Prop := 
     | del_nil (P : M -> Prop) : delete_rel A nil nil P (fun x => x)
     | del_snoc_in (p p' : pointer_sequence M) (P : M -> Prop) (m : M) (Hm : P m) (n : nat) (f : nat -> nat)
@@ -410,22 +438,49 @@ Section Plays.
 
 End Plays.
 
-Lemma Forall_tail : forall (A : Type) (P : A -> Prop) (a : A) (l : list A), Forall P (a :: l) -> (P a /\ Forall P l).
-Proof.
-  intros. inv H; auto.
-Qed.
 
-Definition list_subset_project (A : Type) (P : A -> Prop) (l : list A) (Hl : Forall P l) : list {a : A | P a}.
-  induction l.
-  - apply ([]).
-  - apply Forall_tail in Hl as [Ha Ht]. remember (exist P a Ha). specialize (IHl Ht).
-    apply (s :: IHl).
-Defined. 
+Section Composition.
+  Lemma Forall_tail : forall (A : Type) (P : A -> Prop) (a : A) (l : list A), Forall P (a :: l) -> (P a /\ Forall P l).
+  Proof.
+    intros. inv H; auto.
+  Qed.
 
-Lemma preserve_elem : forall (A : Type) (P : A-> Prop) (l : list A) (Hl : Forall P l),
-    map (fun x => match x with exist _ a _ => a end) (list_subset_project A P l Hl) = l.
-Proof.
-  intros. induction l; auto. 
-  simpl.  destruct ( Forall_tail A0 P0 a l Hl). simpl. rewrite IHl. auto.
-Qed.
+  Definition list_subset_project (A : Type) (P : A -> Prop) (l : list A) (Hl : Forall P l) : list {a : A | P a}.
+    induction l.
+    - apply ([]).
+    - apply Forall_tail in Hl as [Ha Ht]. remember (exist P a Ha). specialize (IHl Ht).
+      apply (s :: IHl).
+  Defined. 
+
+  Lemma preserve_elem : forall (A : Type) (P : A-> Prop) (l : list A) (Hl : Forall P l),
+      map (fun x => match x with exist _ a _ => a end) (list_subset_project A P l Hl) = l.
+  Proof.
+    intros. induction l; auto. 
+    simpl.  destruct ( Forall_tail A0 P0 a l Hl). simpl. rewrite IHl. auto.
+  Qed.
+
+  Definition is_left {A B : Type} (x : A + B) :=
+    match x with inl _ => True | inr _ => False end.
+
+  Definition is_right {A B : Type} (x : A + B) :=
+    match x with inl _ => False | inr _ => True end.
+
+  Definition lower_union_list_left (A B: Type) (l : list (A + B)) (Hl : Forall is_left l) : list A.
+    induction l.
+    - apply [].
+    - apply Forall_tail in Hl as [Ha Ht]. specialize (IHl Ht). 
+      unfold is_left in Ha. destruct a; try contradiction.
+      apply (a :: IHl).
+  Defined.
+
+  Definition lower_union_list_right (A B : Type) (l : list (A + B)) (Hl : Forall is_right l) : list B.
+    induction l.
+    - apply [].
+    - apply Forall_tail in Hl as [Ha Ht]. specialize (IHl Ht).
+      unfold is_right in Ha. destruct a; try contradiction.
+      apply (b :: IHl).
+  Defined.
+
+End Composition.
+
  
