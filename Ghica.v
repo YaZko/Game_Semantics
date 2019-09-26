@@ -226,7 +226,7 @@ Definition iso_curry {A B C : Arena} (m : @M A + (@M B + @M C)) : (@M A + @M B) 
     end
   end.
 
-Set Printing Implicit.
+
 
 Lemma wf_init_prod : forall (A B : Arena), @Arena_WF A -> @Arena_WF B -> forall m, 
                                                @I (Prod_Arena A B) m -> @Q (Prod_Arena A B) m /\ @O (Prod_Arena A B) m.
@@ -281,20 +281,74 @@ Proof.
 Qed.
 
 
-(** Should be simple if I add lemmas like I did for prod  *)
+Lemma wf_init_arrow : forall (A B : Arena), @Arena_WF A -> @Arena_WF B -> forall (m : @M (Arrow_Arena A B)),
+                                                I m -> Q m /\ O m.
+Proof.
+  intros A B Ha Hb m Hm. destruct Ha as [ Ha _ _ _ ]. destruct Hb as [ Hb _ _ _ ].
+  simpl in *. inv Hm. apply Hb in H. split; constructor; tauto.
+Qed.
+
+Lemma wf_e1_arrow : forall (A B : Arena), @Arena_WF A -> @Arena_WF B -> forall (m n : @M (Arrow_Arena A B)),
+                                              enable m n -> Q m.
+Proof.
+  intros A B Ha Hb m n Hmn. destruct Ha as [ _ Ha _ _ ]. destruct Hb as [ Hbq Hb _ _  ]. simpl in *.
+  inv Hmn.
+  - inv H.
+    + apply Ha in H0. constructor. auto.
+    + apply Hb in H0. constructor. auto.
+  - inv H. inv H0. inv H1. constructor. apply Hbq in H. tauto.
+Qed.
+
+Lemma wf_e2_arrow : forall (A B : Arena), @Arena_WF A -> @Arena_WF B -> forall (m n : @M (Arrow_Arena A B)),
+                                             enable m n -> O m <-> P n.
+Proof.
+  intros A B Ha Hb m n Hmn. split; intros; simpl in *.
+  - intro. simpl in *. inv H; inv H0.
+    + destruct Ha. destruct Hb. apply H1. apply e5 with (n := a0); auto.
+      inv Hmn.
+      * inv H0. auto.
+      * inv H0. inv H2.
+    + destruct Ha. destruct Hb. apply H1. inv Hmn.
+      * inv H0.
+      * inv H0. inv H2.
+    + inv Hmn; inv H0. inv H2. inv H3. destruct Ha. apply init_WF0 in H2. unfold P in H. tauto.
+    + inv Hmn; inv H0.
+      * destruct Hb. apply e5 in H4. unfold P in H4. tauto.
+      * inv H3.
+  - inv Hmn; inv H0; simpl in *.
+    + constructor. intro. apply H. simpl. constructor. intro. destruct Ha. apply e5 in H1. unfold P in H1. tauto.
+    + constructor. unfold P in H. simpl in *. destruct Hb. apply e5 in H1. apply H1. intro. apply H. constructor.
+      auto.
+    + inv H1. inv H2. constructor. destruct Hb. apply init_WF0 in H0. tauto.
+Qed.
+
+Lemma wf_e3_arrow : forall (A B : Arena), @Arena_WF A -> @Arena_WF B -> forall (m n : @M (Arrow_Arena A B)),
+                                              enable m n -> ~ I n.
+Proof.
+  intros A B Ha Hb m n Hmn. simpl in *. intro. inv H. inv Hmn.
+  - inv H. destruct Hb. apply e6 in H3. tauto.
+  - inv H. inv H1. inv H2.
+Qed.
+
+
 Lemma wf_arrow : forall (A B : Arena), @Arena_WF A -> @Arena_WF B -> @Arena_WF (Arrow_Arena A B).
 Proof.
-Admitted.
-
+  intros A B Ha Hb. constructor.
+  - apply wf_init_arrow; auto.
+  - apply wf_e1_arrow; auto.
+  - apply wf_e2_arrow; auto.
+  - apply wf_e3_arrow; auto.
+Qed.
 
 (** could probably parts of automate this  *)
 
 Lemma currying : forall (A B C : Arena), 
-    @Arena_WF A -> @Arena_WF B -> @Arena_WF C ->
     exists (f : @M A + (@M B + @M C) -> (@M A + @M B) + @M C),
                  @arena_isomorphism  (Arrow_Arena A (Arrow_Arena B C)) (Arrow_Arena (Prod_Arena A B) C) f.
   Proof.
-    intros A B C HA HB HC. intros. exists iso_curry. unfold arena_isomorphism, bijection. split.
+    intros A B C. 
+    intros.
+    exists iso_curry. unfold arena_isomorphism, bijection. split.
     - intros. split; intros.
       + subst. auto.
       + destruct x; destruct y; simpl in *; auto; try discriminate.
@@ -336,27 +390,32 @@ Lemma currying : forall (A B C : Arena),
      + destruct m; simpl in *.
        * inv H.
        * destruct m; inv H. repeat constructor. auto.
-     + (*assert (Hen : enable m n). auto.*) destruct m; destruct n; inv H; inv H0;
-       try (repeat constructor; auto); try inv H; try inv H1; simpl in *.
-       * destruct m.
-         -- inv H2. 
-         -- inv H2. (** If I still had m |- m0 then the rules about enable would give us a contradiction *)
-            admit.
-       * destruct m; destruct m0.
-         -- inv H2; inv H; try (repeat constructor; auto).
-            inv H0; inv H1.
-         -- inv H2; inv H. inv H0.
-         -- inv H2; inv H. inv H0; inv H1. (** same as previous issue  *) admit.
-         -- inv H2; inv H; try (repeat constructor; auto).
-            inv H1.
-    + destruct m; destruct n; inv H; inv H0; simpl in *; 
-        try (repeat constructor; auto); try (inv H2; auto).
-      * inv H1. inv H.
-      * destruct m0; discriminate.
-      
-
-       
-Admitted.       
+     + simpl in *. inv H; inv H0.
+       * simpl. repeat constructor. auto.
+       * inv H.
+         -- inv H0; repeat constructor; auto.
+         -- inv H0. inv H. inv H1. right. simpl. repeat constructor; auto.
+       * inv H. inv H1. inv H0. right. repeat constructor; auto.
+    +  destruct m; destruct n; inv H; inv H0; auto.
+      * simpl. constructor. constructor. inv H2. auto.
+      * inv H.
+      * simpl in *. inv H2.
+      simpl in *. left.  destruct m0; try discriminate.
+      * inv H.
+      * simpl in *. destruct a; destruct m; try discriminate. inv H2.
+      * simpl in *. destruct m; try discriminate.
+        -- inv H.
+        -- inv H. inv H1. inv H0. right. constructor.
+           ++ repeat constructor; auto.
+           ++ constructor. auto.
+      * simpl in *. destruct a; destruct m; try discriminate. inv H2. left. constructor. constructor.
+        destruct m0; try discriminate. injection H1 as Hmb. subst. injection H as Hmm. subst. constructor. auto.
+      * simpl in *. destruct m; destruct m0; try discriminate.
+        injection H. injection H. intros. subst. repeat constructor. injection H1. intros. subst. auto.
+      * simpl in *. destruct m; destruct m0; try discriminate; try inv H.
+        -- inv H1. inv H0. left. right. right. constructor; repeat constructor; auto.
+        -- inv H1.
+Qed.
 
 
 Section Plays.
