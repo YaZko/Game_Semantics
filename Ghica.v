@@ -228,7 +228,7 @@ Definition iso_curry {A B C : Arena} (m : @M A + (@M B + @M C)) : (@M A + @M B) 
 
 
 
-Lemma wf_init_prod : forall (A B : Arena), @Arena_WF A -> @Arena_WF B -> forall m, 
+Lemma wf_init_prod : forall (A B : Arena), @Arena_WF A -> @Arena_WF B -> forall m,
                                                @I (Prod_Arena A B) m -> @Q (Prod_Arena A B) m /\ @O (Prod_Arena A B) m.
 Proof.
   intros A B. intros. simpl in *.
@@ -240,12 +240,12 @@ Qed.
 Lemma wf_e1_prod : forall (A B : Arena), @Arena_WF A -> @Arena_WF B -> forall (m n : @M (Prod_Arena A B)),
                                              enable m n -> Q m.
 Proof.
-  intros A B. intros. simpl in *. destruct H as [ _ Ha _ _ ]. destruct H0 as [ _ Hb _ _  ]. 
+  intros A B. intros. simpl in *. destruct H as [ _ Ha _ _ ]. destruct H0 as [ _ Hb _ _  ].
   inv H1.
   - apply Ha in H. constructor. auto.
   - apply Hb in H. constructor. auto.
 Qed.
-                                                                                   
+
 Lemma wf_e2_prod : forall (A B : Arena), @Arena_WF A -> @Arena_WF B -> forall (m n : @M (Prod_Arena A B)),
                                              enable m n -> O m <-> P n.
 Proof.
