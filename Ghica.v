@@ -663,7 +663,7 @@ Section Plays.
     let (p',f) := delete_fun p X in
     map (fun x => match x with pair m n => (m, f n) end) p'.
 
-  Lemma delete_fun_delete_same_m : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
+  Lemma delete_fun_delete_same_m : forall (M : Type) (p : pointer_sequence M) (X : M -> bool),
       map fst (fst (delete_fun p X)) = map fst (delete p X).
     Proof.
       intros. induction p; auto.
@@ -671,13 +671,14 @@ Section Plays.
       destruct (X m) eqn: Hm; simpl.
       - simpl in *. clear Hm Heqa Heqdel IHp.
         induction p0; auto. simpl. rewrite <- IHp0. destruct a0. simpl. auto.
-      -  clear Hm Heqa Heqdel IHp. enough (map fst p0 = map fst (map (fun x : M * nat => let (m0, n1) := x in (m0, n0 n1))
+      - clear Hm Heqa Heqdel IHp. 
+         enough (map fst p0 = map fst (map (fun x : M0 * nat => let (m0, n1) := x in (m0, n0 n1))
           p0)). rewrite H. auto.
          induction p0; auto. simpl. destruct a0. simpl. rewrite IHp0. auto.
     Qed.
 
 
-  Lemma delete_fun_none_in_X : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
+  Lemma delete_fun_none_in_X : forall (M : Type) (p : pointer_sequence M) (X : M -> bool),
      Forall (fun x => X (fst x) = false) (fst (delete_fun p X)).
   Proof.
     intros. induction p.
@@ -689,7 +690,7 @@ Section Plays.
   Qed.
 
 
-  Lemma delete_none_in_X : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
+  Lemma delete_none_in_X : forall (M : Type) (p : pointer_sequence M) (X : M -> bool),
       Forall (fun x => X (fst x) = false) (delete p X).
   Proof.
     intros.
@@ -861,10 +862,46 @@ Section Composition.
     intros A B x. split; intros; destruct x; simpl; auto; discriminate.
   Qed.
 
-(*
-  Definition delete_left_lower {A1 A2 : Arena} (l : pointer_sequence (@M A1 + @M A2)) : pointer_sequence (@M A2).
-    intros. remember (delete )
-*)
+
+  Definition delete_left_lower {A B : Type} (l : pointer_sequence (A + B)) : pointer_sequence B.
+    intros. remember (delete l is_leftb). remember (delete_none_in_X (A + B) l is_leftb).
+    assert (Forall (fun x => is_right (fst x) ) p).
+    {
+      clear Heqf. rewrite <- Heqp in f. clear Heqp.
+      induction p.
+      - constructor.
+      - inv f. constructor; auto.
+        destruct a. simpl in *. destruct s; try discriminate; simpl; auto.
+    }
+    clear Heqp.
+    induction (p).
+    - apply [].
+    - apply Forall_tail in H as [Ha Hp].
+      apply IHp0. apply Hp.
+  Defined.    
+
+
+  Definition delete_right_lower {A B : Type} (l : pointer_sequence (A + B)) : pointer_sequence A.
+    intros. remember (delete l is_rightb). remember (delete_none_in_X (A + B) l is_rightb).
+    assert (Forall (fun x => is_left (fst x)) p).
+    {
+      clear Heqf. rewrite <- Heqp in f. clear Heqp.
+      induction p.
+      - constructor.
+      - inv f. constructor; auto.
+        destruct a. simpl in *. destruct s; try discriminate; simpl; auto.
+    }
+    clear Heqp.
+    induction p.
+    - apply [].
+    - apply Forall_tail in H as [Ha Hp].
+      apply IHp. apply Hp.
+  Defined.
+
+
+  Definition interaction {M N : Type} (tau : pointer_sequence M -> Prop) (sigma : pointer_sequence N -> Prop)
+             : pointer_sequence (M + N) -> Prop :=
+    fun p => tau (delete_right_lower p) /\ sigma (delete_left_lower p).
 
 End Composition.
 
