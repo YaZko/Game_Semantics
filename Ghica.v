@@ -3,9 +3,10 @@ From Games Require Import
 
 From Coq Require Import
      List
-     Relations.
+     Relations
+     Nat.
 Import ListNotations.
-
+Require Import Omega.
 (**
    We now implement "The far side of the cube" as described by Dan R. Ghica.
    It is stated as being the simplest traditional game semantics in the sense
@@ -340,6 +341,18 @@ Proof.
   - apply wf_e3_arrow; auto.
 Qed.
 
+Lemma enable_comp : forall (A B C : Arena) (a : @M A) (b : @M B) (c : @M C), 
+    @enable (Arrow_Arena A B)  (inr b) (inl a) -> 
+    @enable (Arrow_Arena B C) (inr c) (inl b) -> 
+    @enable (Arrow_Arena A C) (inr c) (inl a).
+Proof.
+  intros A B C a b c Hba Hbc.
+  (** show that a b and c are all initial *)
+  inv Hba; inv H. inv H0. inv H1. right. repeat constructor; auto.
+  inv Hbc; inv H. inv H1. inv H3. auto.
+Qed.
+
+
 (** could probably parts of automate this  *)
 
 Lemma currying : forall (A B C : Arena), 
@@ -370,7 +383,7 @@ Lemma currying : forall (A B C : Arena),
          -- injection H0. intros. subst. auto.
          -- discriminate.
        * destruct m; try discriminate. injection H0. intros. subst. repeat constructor. auto.
-     +  destruct m; simpl in *. (** running into issues with the opponent construction ~OA + ~OB vs ~(OA + OB) ?  *)
+     +  destruct m; simpl in *.
        * inv H. constructor. unfold P in *. unfold not. intros. apply H1. 
          inv H. assumption.
        * inv H. inv H1.
@@ -429,6 +442,98 @@ Section Plays.
   (* A play is a pointer_sequence such that the first pointer is an initial
      move, and every subsequent pointer is such that its move is indeed enabled
      by the pointed justifying move *)
+
+  Definition decreasing (f : nat -> nat) : Prop :=
+    forall n, f n = 0 \/ f n < n.
+
+  Inductive pointer_sequence_wf {M : Type} : pointer_sequence M -> Prop :=
+   | nil_wf : pointer_sequence_wf []
+   | cons_wf (p: pointer_sequence M) (Hp : pointer_sequence_wf p) (m : M) (n : nat) (Hn : n = 0 \/ n < length p)  :
+       pointer_sequence_wf ((m,n) :: p).
+
+
+  Fixpoint extract_points_to_fun {M : Type} (p : pointer_sequence M) : nat -> nat :=
+    match p with
+    | [] => fun _ => 0
+    | h :: t => let f := extract_points_to_fun t in
+                let (m,n) := h in
+                fun x => if x =? length p then n else f x end.
+  (*there might be an issue with self pointing*)
+  Lemma extract_gt_length : forall (M : Type) (p : pointer_sequence M) (k : nat),
+      k > length p -> extract_points_to_fun p k =0.
+    Proof.
+      intros. induction p; simpl; auto.
+      destruct a. simpl in H. destruct (k =? S (length p)) eqn : Heq.
+      - apply Nat.eqb_eq in Heq. omega.
+      - apply IHp. omega.
+    Qed.
+
+  Lemma wf_points_to_dec : forall (M : Type) (p : pointer_sequence M), pointer_sequence_wf p ->
+                                                                       decreasing (extract_points_to_fun p).
+    Proof.
+      intros. induction H.
+      - simpl. unfold decreasing. intros. auto.
+      - simpl. unfold decreasing. intros. destruct n0 as [ | x]; auto.
+        + left. destruct ( 0 =? S (length p)) eqn : Heq; try discriminate.
+          unfold decreasing in *. specialize ( IHpointer_sequence_wf 0); omega.
+        + unfold decreasing in *.  specialize (IHpointer_sequence_wf (S x)).
+          destruct IHpointer_sequence_wf as [H0  | H0]; destruct Hn.
+          * rewrite H0. rewrite H1. left. destruct  (S x =? S (@length (pointer M0) p)); auto.
+          * rewrite H0. right. destruct  (S x =? S (@length (pointer M0) p)) eqn : Heq; try omega.
+            apply Nat.eqb_eq in Heq. omega.
+          * rewrite H1. right. destruct ( S x =? S (@length (pointer M0) p)); auto; omega.
+          * right. destruct ( S x =? S (@length (pointer M0) p)) eqn : Heq; try omega.
+            apply Nat.eqb_eq in Heq. omega.
+    Qed.
+      
+
+    Lemma dec_points_to_cons : forall (M : Type) (m : M) (n : nat) (p : pointer_sequence M),
+        decreasing (extract_points_to_fun ((m,n) :: p)) -> decreasing (extract_points_to_fun p).
+      Proof.
+        induction p.
+        - simpl. unfold decreasing. intros; left; auto.
+        -
+      Admitted.
+      
+    Lemma dec_points_to_wf : forall (M : Type) (p : pointer_sequence M), decreasing (extract_points_to_fun p) ->
+                                                                         pointer_sequence_wf p.
+      Proof.
+        intros. induction p.
+        - constructor.
+        - destruct a as [m n]. apply cons_wf.
+          + apply IHp. simpl in H. clear IHp. unfold decreasing in *. intros k. specialize (H k).
+            destruct H; destruct (k =? S (length p)) eqn : Heq; try tauto.
+            * apply Nat.eqb_eq in Heq. left. apply extract_gt_length. omega.
+            * apply Nat.eqb_eq in Heq. left. apply extract_gt_length. omega.
+          + apply dec_points_to_cons in H as H1. unfold decreasing in H1, H. simpl in H.
+            specialize (H n).
+            destruct (n =? S (length p)) eqn : Heq.
+            * destruct H; omega.
+            * fold decreasing in H1.
+
+            simpl in H. unfold decreasing in H.
+           (* specialize (H1 n (length p)). destruct H1; auto.
+
+
+              enough (pointer_sequence_wf p).
+              -- inv H1.
+                 ++ specialize (H n). rewrite Heq in H.
+                    d
+                    simpl in H0. simpl in H. simpl. specialize (H n).
+                    destruct (n =? 1); destruct H; try omega.
+                    ** left.
+
+            unfold decreasing in H. right.
+
+            simpl in H. specialize (H n) as H'.
+            destruct (n =? S (length p)) eqn : Heq.
+            * apply Nat.eqb_eq in Heq. destruct H'; omega.
+            * assert (decreasing (extract_points_to_fun p)). admit. apply IHp in H1.
+              -- clear H'. clear H0. simpl in H. specialize (H n). simpl in Heq. rewrite Heq in H.
+              destruct H.
+              -- omega.*)
+      Admitted.
+    
   Record play (A : Arena) (p: pointer_sequence M): Prop :=
     {
       play_justifies: forall p' (m: M) (a: nat),
@@ -513,6 +618,35 @@ Section Plays.
     | Snoc x p => []
     end.
 
+
+  Notation "x <? y" := (Nat.ltb x y) (at level 70).
+  Definition redirect (n : nat) (f : nat -> nat) : nat -> nat :=
+    fun m => if f m =? n then f n (*follow the link*)
+             else if n <? f m then f m - 1 (*reindex*)
+             else f m. (* no change needed*)
+
+  Lemma decreasing_zero : forall f, decreasing f -> f 0 = 0.
+    Proof.
+      intros. unfold decreasing in *. specialize (H 0).
+      destruct H; auto. omega.
+    Qed.
+
+  Lemma redirect_pres_decrease : forall f n, decreasing f -> decreasing (redirect n f).
+  Proof.
+    specialize (Nat.eqb_eq) as Hnat. 
+    unfold decreasing in *. intros f n Hdec m. intros.
+    unfold redirect.
+    destruct (f m =? n) eqn: Hfmn.
+    - apply Hnat in Hfmn. rewrite <- Hfmn.
+      specialize (Hdec (f m)) as Hfm. destruct Hfm; try tauto.
+      specialize (Hdec m) as Hm. destruct Hm; omega.
+    - specialize (Nat.eqb_neq) as Hnat'. clear Hfmn.
+      destruct (n <? f m) eqn : Hfmn.
+      + specialize (Hdec m). destruct Hdec; omega.
+      + apply Hdec.
+   Qed. 
+
+  (** definitely wrong  *)
   Definition decr_above_or_eq (n : nat) (f : nat -> nat) :=
     fun m => if Nat.ltb n m then f m - 1 else f m.
 
@@ -522,7 +656,7 @@ Section Plays.
     | x :: p => let (m,n) := x in 
                   let (p',f) := delete_fun A p X in
                   if X m 
-                  then (p', decr_above_or_eq (length p + 1) f )
+                  then (p', redirect (length p + 1) f )
                   else (x :: p',f) end.
 
   Fixpoint delete (A : Arena) (p : pointer_sequence M) (X : M -> bool) : pointer_sequence M :=
@@ -568,7 +702,59 @@ Section Plays.
      
 (*  Lemma delete_preserves_play_init : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
       play *)
- 
+(** doesn't hold in general*) 
+(*delete partially preserves pointer structure in the sense that if a -> b, neither a nor b in X, then still a-> b
+  also need some notion of the first valid ptr from a, where if 
+*)
+(*
+  Lemma delete_fun_predecreasing : forall (A : Arena) m n (p : pointer_sequence M) (X : M -> bool),
+      decreasing (snd (delete_fun A ((m,n) :: p) X)).
+    Proof.
+      intros A m n p X. induction p.
+      - simpl. unfold decreasing. intros.
+        destruct (X m); simpl. unfold redirect.
+        (* this may be related to a broader problem may need to make delete_fun [] return fun x => 0 *) admit.
+      - simpl. destruct a. destruct (delete_fun A p X) eqn : Heq. simpl in *. rename n0 into f.
+        destruct (X m); simpl; auto.
+        apply redirect_pres_decrease. auto.
+    Admitted.
+*)
+  Lemma delete_preserve_wf : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
+      pointer_sequence_wf p -> pointer_sequence_wf (delete A p X).
+  Proof.
+    intros. induction H.
+    - simpl. constructor.
+    - simpl. destruct (X m) eqn : Hx.
+      + destruct (delete_fun A0 p X) eqn : Heq.
+        destruct ( (map
+       (fun x : M * nat =>
+        let (m0, n1) := x in (m0, redirect (length p + 1) n0 n1)) p0)) eqn : Heq'.
+        * constructor.
+        * destruct p1. constructor.
+  Admitted.
+  
+  Fixpoint first_n {A : Type} (n : nat) (l : list A) :=
+    match n with
+    | 0 => []
+    | S m => match l with
+             | [] => []
+             | h :: t => h :: first_n m t end end.
+(* need to deal with strict decreasing
+  Fixpoint first_valid_ptr (A : Arena) (p :pointer_sequence M) (X : M -> bool) : option (pointer M) :=
+    match p with
+    | [] => None
+    | h :: t => let (m,n) := h in
+                if X m then first_valid_ptr A (first_n n t) X
+                       else Some (m,n) end.
+*)
+
+Inductive first_valid_ptr_from (A : Arena) (p : pointer_sequence M) (X : M -> Prop) : M -> M -> Prop :=
+  | m_valid (m : M) : ~ (X m) -> first_valid_ptr_from A p X m m
+
+.
+
+
+(** this lemma is false  *)
   Lemma delete_preserves_play : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
       play A p -> play A (delete A p X).
   Proof.
@@ -581,7 +767,7 @@ Section Plays.
   Inductive delete_rel (A : Arena): pointer_sequence M -> pointer_sequence M -> (M -> Prop) -> (nat -> nat) -> Prop := 
     | del_nil (P : M -> Prop) : delete_rel A nil nil P (fun x => x)
     | del_snoc_in (p p' : pointer_sequence M) (P : M -> Prop) (m : M) (Hm : P m) (n : nat) (f : nat -> nat)
-                  (Hpp' :delete_rel A p' p P f) : delete_rel A p' (snoc p (m,n)) P (decr_above_or_eq (length p') f)
+                  (Hpp' :delete_rel A p' p P f) : delete_rel A p' (snoc p (m,n)) P (redirect (length p') f)
     | del_snoc_out (p p' : pointer_sequence M) (P : M -> Prop) (m : M) (Hm : ~ P m) (n : nat) (f : nat -> nat)
                    (Hpp' : delete_rel A p' p P f) : delete_rel A (snoc p' (m,n)) (snoc p (m,n)) P f
 .
@@ -658,6 +844,27 @@ Section Composition.
       unfold is_right in Ha. destruct a; try contradiction.
       apply (b :: IHl).
   Defined.
+
+  Definition is_leftb {A B : Type} (x : A + B) :=
+    match x with inl _ => true | inr _ => false end.
+
+  Definition is_rightb {A B : Type} (x : A + B) :=
+    match x with inl _ => false | inr _ => true end.
+
+  Lemma is_left_iffb : forall (A B : Type) (x : A + B), is_left x <-> is_leftb x = true.
+  Proof.
+    intros A B x. split; intros; destruct x; simpl; auto; discriminate.
+  Qed.
+    
+  Lemma is_right_iffb : forall (A B : Type) (x : A + B), is_right x <-> is_rightb x = true.
+  Proof.
+    intros A B x. split; intros; destruct x; simpl; auto; discriminate.
+  Qed.
+
+(*
+  Definition delete_left_lower {A1 A2 : Arena} (l : pointer_sequence (@M A1 + @M A2)) : pointer_sequence (@M A2).
+    intros. remember (delete )
+*)
 
 End Composition.
 
