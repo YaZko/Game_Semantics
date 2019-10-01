@@ -650,24 +650,24 @@ Section Plays.
   Definition decr_above_or_eq (n : nat) (f : nat -> nat) :=
     fun m => if Nat.ltb n m then f m - 1 else f m.
 
-  Fixpoint delete_fun (A : Arena) (p : pointer_sequence M) (X : M -> bool) : pointer_sequence M * (nat -> nat) :=
+  Fixpoint delete_fun {M : Type} (p : pointer_sequence M) (X : M -> bool) : pointer_sequence M * (nat -> nat) :=
     match p with
     | [] => ([], fun x => x)
     | x :: p => let (m,n) := x in 
-                  let (p',f) := delete_fun A p X in
+                  let (p',f) := delete_fun p X in
                   if X m 
                   then (p', redirect (length p + 1) f )
                   else (x :: p',f) end.
 
-  Fixpoint delete (A : Arena) (p : pointer_sequence M) (X : M -> bool) : pointer_sequence M :=
-    let (p',f) := delete_fun A p X in
+  Fixpoint delete {M : Type} (p : pointer_sequence M) (X : M -> bool) : pointer_sequence M :=
+    let (p',f) := delete_fun p X in
     map (fun x => match x with pair m n => (m, f n) end) p'.
 
   Lemma delete_fun_delete_same_m : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
-      map fst (fst (delete_fun A p X)) = map fst (delete A p X).
+      map fst (fst (delete_fun p X)) = map fst (delete p X).
     Proof.
       intros. induction p; auto.
-      simpl. destruct a eqn : Heqa. destruct (delete_fun A0 p X) eqn : Heqdel.
+      simpl. destruct a eqn : Heqa. destruct (delete_fun p X) eqn : Heqdel.
       destruct (X m) eqn: Hm; simpl.
       - simpl in *. clear Hm Heqa Heqdel IHp.
         induction p0; auto. simpl. rewrite <- IHp0. destruct a0. simpl. auto.
@@ -678,11 +678,11 @@ Section Plays.
 
 
   Lemma delete_fun_none_in_X : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
-     Forall (fun x => X (fst x) = false) (fst (delete_fun A p X)).
+     Forall (fun x => X (fst x) = false) (fst (delete_fun p X)).
   Proof.
     intros. induction p.
     - simpl. auto.
-    - simpl. destruct a as [m n]. destruct (delete_fun A0 p X) as [p' f] eqn : Heq.
+    - simpl. destruct a as [m n]. destruct (delete_fun p X) as [p' f] eqn : Heq.
       destruct (X m) eqn : Hx.
       + simpl in *. auto.
       + simpl in *. constructor; auto.
@@ -690,13 +690,13 @@ Section Plays.
 
 
   Lemma delete_none_in_X : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
-      Forall (fun x => X (fst x) = false) (delete A p X).
+      Forall (fun x => X (fst x) = false) (delete p X).
   Proof.
     intros.
-    enough (Forall (fun m => X m = false) (map fst (delete A0 p X))).
-    - induction (delete A0 p X); auto. inv H. constructor; auto.
+    enough (Forall (fun m => X m = false) (map fst (delete p X))).
+    - induction (delete p X); auto. inv H. constructor; auto.
     - rewrite <- delete_fun_delete_same_m.
-      induction p; simpl; auto. destruct a as [m n]. destruct (delete_fun A0 p X) as [p' f] eqn : Heq.
+      induction p; simpl; auto. destruct a as [m n]. destruct (delete_fun p X) as [p' f] eqn : Heq.
       destruct (X m) eqn : Hx; simpl in *; auto.
   Qed.
      
@@ -720,12 +720,12 @@ Section Plays.
     Admitted.
 *)
   Lemma delete_preserve_wf : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
-      pointer_sequence_wf p -> pointer_sequence_wf (delete A p X).
+      pointer_sequence_wf p -> pointer_sequence_wf (delete p X).
   Proof.
     intros. induction H.
     - simpl. constructor.
     - simpl. destruct (X m) eqn : Hx.
-      + destruct (delete_fun A0 p X) eqn : Heq.
+      + destruct (delete_fun p X) eqn : Heq.
         destruct ( (map
        (fun x : M * nat =>
         let (m0, n1) := x in (m0, redirect (length p + 1) n0 n1)) p0)) eqn : Heq'.
@@ -756,7 +756,7 @@ Inductive first_valid_ptr_from (A : Arena) (p : pointer_sequence M) (X : M -> Pr
 
 (** this lemma is false  *)
   Lemma delete_preserves_play : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
-      play A p -> play A (delete A p X).
+      play A p -> play A (delete p X).
   Proof.
     intros. induction p; auto.
     simpl.
