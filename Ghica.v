@@ -132,7 +132,7 @@ Infix "↪" := Arrow_Arena (at level 11, right associativity).
  *)
 
 Definition bijection {A B : Type} (f : A -> B) :=
-  forall x y, x = y <-> f x = f y. 
+  (forall x y, f x = f y -> x = y) /\ (forall y, exists x, f x = y). 
 
 Definition arena_isomorphism {A1 A2 : Arena} (f : @M A1 -> @M A2) : Prop :=
   bijection f /\ forall m n, (@Q A1 m <-> @Q A2 (f m)) /\ (@O A1 m <-> @O A2 (f m)) /\
@@ -145,6 +145,7 @@ Proof.
   intros. unfold isomorphic, arena_isomorphism. exists (fun x => x). 
   split.
   - unfold bijection. intros. split; auto.
+    intros. exists y. auto.
   - intros. repeat split; auto.
 Qed.
 
@@ -162,8 +163,10 @@ Lemma iso_transitive : forall A1 A2 A3, isomorphic A1 A2 -> isomorphic A2 A3 -> 
   destruct H as [f12 [Hbi12 Hiso12] ]. destruct H0 as [f23 [Hbi23 Hiso23] ].
   exists (fun x => f23 (f12 x) ). split; intros; repeat split;
   try (intros; specialize (Hiso12 m n); specialize (Hiso23 (f12 m) (f12 n)); tauto).
-  - intros. unfold bijection in *. apply Hbi12 in H. apply Hbi23 in H. auto.
-  - intros. unfold bijection in *. apply Hbi23 in H. apply Hbi12 in H. auto.
+  - intros. unfold bijection in *. destruct Hbi12. apply H0. destruct Hbi23. apply H2. auto.
+  - intros. unfold bijection in *. destruct Hbi23 as [ _ Hbi23]. destruct Hbi12 as [ _ Hbi12].
+    specialize (Hbi23 y). destruct Hbi23 as [x' Hx']. specialize (Hbi12 x'). destruct Hbi12 as [ x'' Hx''].
+    exists x''. subst. auto.
 Qed.
 
 
@@ -172,19 +175,34 @@ Definition isol {A : Arena} (m : void + M) : M :=
   | inl v => match v return M with end
   | inr m' => m' end.
 
+Lemma isol_bij : forall A, bijection (@isol A).
+Proof.
+  intros. unfold bijection. split; intros.
+  - destruct x; destruct y; try contradiction; simpl in *.
+    subst. auto.
+  - exists (inr y). auto.
+Qed.
+    
+
+
 Definition isor {A : Arena} (m : M + void) : M :=
   match m with
   | inl m' => m'
   | inr v => match v return M with end
   end.
 
+Lemma isor_bij : forall A, bijection (@isor A).
+Proof.
+  intros. unfold bijection. split; intros.
+  - destruct x; destruct y; try contradiction; simpl in *. subst. auto.
+  - exists (inl y). auto.
+Qed.
 
 Lemma unit_left_id_product : forall (A : Arena), exists (f : void + M -> M),
       @arena_isomorphism (Prod_Arena Unit A) A f.
   Proof.
     intro A. exists isol. unfold arena_isomorphism, bijection. split.
-    - intros. split; intros; subst; auto. destruct x; destruct y; 
-       unfold isol in *; simpl in *; try contradiction. subst. auto.
+    - apply isol_bij.
     - intros. repeat split; intros;
       try (destruct m; try contradiction; simpl in *; inv H; try contradiction; auto);
       try (destruct m; try contradiction; simpl in *; constructor; assumption).
@@ -195,8 +213,7 @@ Lemma unit_right_id_product : forall (A : Arena), exists (f : M + void -> M),
         @arena_isomorphism (Prod_Arena A Unit) A f.
   Proof.
     intros A. exists isor. unfold arena_isomorphism, bijection. split.
-    - intros. split; intros; subst; auto. destruct x; destruct y; 
-       unfold isor in *; simpl in *; try contradiction. subst. auto.
+    - apply isor_bij.
     - intros. repeat split; intros;
       try (destruct m; try contradiction; simpl in *; inv H; try contradiction; auto);
       try (destruct m; try contradiction; simpl in *; constructor; assumption).
@@ -207,8 +224,7 @@ Lemma unit_left_id_exp : forall (A : Arena), exists (f : void + M -> M),
         @arena_isomorphism (Arrow_Arena Unit A) A f.
   Proof.
     intros A. exists isol. unfold arena_isomorphism, bijection. split.
-    - intros. split; intros; subst; auto. destruct x; destruct y; 
-       unfold isor in *; simpl in *; try contradiction. subst. auto.
+    - apply isol_bij.
     - intros. repeat split; intros;
       try (destruct m; try contradiction; simpl in *; inv H; try contradiction; auto);
       try (destruct m; try contradiction; simpl in *; constructor; assumption).
@@ -226,7 +242,22 @@ Definition iso_curry {A B C : Arena} (m : @M A + (@M B + @M C)) : (@M A + @M B) 
     | inr c => inr c
     end
   end.
-
+Set Printing Implicit.
+Lemma iso_curry_bij : forall A B C, bijection (@iso_curry A B C).
+Proof.
+  intros. unfold bijection. split; intros.
+  - repeat match goal with | [x : ?T1 + ?T2 |- _] => destruct x end;  simpl in *;
+      try discriminate;
+      try injection H; intros; simpl in *; subst; auto.
+  - repeat match goal with 
+           | [x : ?T1 + ?T2 |- _ ] => destruct x 
+           end.
+    + exists (inl m). auto.
+    + exists (inr (inl m)). auto.
+    + exists (inr (inr m)). auto.
+Qed.
+    
+  
 
 
 Lemma wf_init_prod : forall (A B : Arena), @Arena_WF A -> @Arena_WF B -> forall m,
@@ -362,14 +393,7 @@ Lemma currying : forall (A B C : Arena),
     intros A B C. 
     intros.
     exists iso_curry. unfold arena_isomorphism, bijection. split.
-    - intros. split; intros.
-      + subst. auto.
-      + destruct x; destruct y; simpl in *; auto; try discriminate.
-        * injection H. intros. subst. auto.
-        * destruct m0; try discriminate.
-        * destruct m; try discriminate.
-        * destruct m; destruct m0; try discriminate;
-            try (injection H; intros; subst; auto).
+    - apply iso_curry_bij.
    - intros. repeat split; intros.
      + destruct m; simpl in *. 
        * inv H. repeat constructor. auto.
@@ -449,7 +473,7 @@ Section Plays.
   Inductive pointer_sequence_wf {M : Type} : pointer_sequence M -> Prop :=
    | nil_wf : pointer_sequence_wf []
    | cons_wf (p: pointer_sequence M) (Hp : pointer_sequence_wf p) (m : M) (n : nat) (Hn : n = 0 \/ n < length p)  :
-       pointer_sequence_wf ((m,n) :: p).
+       pointer_sequence_wf ((m,n) :: p). 
 
 
   Fixpoint extract_points_to_fun {M : Type} (p : pointer_sequence M) : nat -> nat :=
@@ -781,15 +805,18 @@ Inductive first_valid_ptr_from (A : Arena) (p : pointer_sequence M) (X : M -> Pr
   Definition contains (s : name_set) x := s x.
   Definition union (s t : name_set) := fun x => orb (s x)  (t x).
 
-  Fixpoint hered_just_fun (A : Arena) (p : pointer_sequence M ) (X : M -> bool) : pointer_sequence M * name_set :=
+  Fixpoint hered_just_fun {M : Type} (p : pointer_sequence M ) (X : M -> bool) : pointer_sequence M * name_set :=
     match p with
     | [] => ([], empty)
     | x :: p => let (m,n) := x in
-                let (p', s) := hered_just_fun A p X in
+                let (p', s) := hered_just_fun p X in
                 if X m
                 then (x :: p', add_elem (length p) s)
                 else (p',s)
     end.
+
+  Definition hered_just {M : Type} (p : pointer_sequence M) (X : M -> bool) : pointer_sequence M :=
+    fst (hered_just_fun p X).
 
   Inductive hered_just_rel (A : Arena) : pointer_sequence M -> pointer_sequence M -> (M -> Prop) -> (nat -> Prop) -> Prop :=
     | hered_nil (P : M -> Prop) : hered_just_rel A [] [] P (fun x => False)  
@@ -882,7 +909,7 @@ Section Composition.
 
 
   Definition delete_right_lower {A B : Type} (l : pointer_sequence (A + B)) : pointer_sequence A.
-    intros. remember (delete l is_rightb). remember (delete_none_in_X (A + B) l is_rightb).
+    intros. remember (delete l is_rightb) as p. remember (delete_none_in_X (A + B) l is_rightb).
     assert (Forall (fun x => is_left (fst x)) p).
     {
       clear Heqf. rewrite <- Heqp in f. clear Heqp.
@@ -899,10 +926,17 @@ Section Composition.
   Defined.
 
 
-  Definition interaction {M N : Type} (tau : pointer_sequence M -> Prop) (sigma : pointer_sequence N -> Prop)
+  Definition interaction (M N : Type) (tau : pointer_sequence M -> Prop) (sigma : pointer_sequence N -> Prop)
              : pointer_sequence (M + N) -> Prop :=
     fun p => tau (delete_right_lower p) /\ sigma (delete_left_lower p).
 
+
+  Definition iteration (M : Type) (N : M -> bool) (sigma : pointer_sequence M -> Prop) : pointer_sequence M -> Prop  :=
+    fun p => forall (m : M) (n : nat), In (m,n) p -> N m = true -> sigma (hered_just p N) .
+
+(*
+  Definition composition (A B C : Type) ()
+*)
 End Composition.
 
  
