@@ -20,6 +20,7 @@ Ltac flatten_all :=
   match goal with
   | h: context[match ?x with | _ => _ end] |- _ => let Heq := fresh "Heq" in destruct x eqn:Heq
   | |- context[match ?x with | _ => _ end] => let Heq := fresh "Heq" in destruct x eqn:Heq
+  | _ => idtac
   end.
 
 (****************************** Lists ******************************)

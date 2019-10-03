@@ -64,7 +64,7 @@ Section Arena.
 End Arena.
 
 Infix "⊢" := enable (at level 50).
-Notation "⟨ M , Q , O , I , R ⟩" := (Build_Arena M Q O I R). 
+Notation "⟨ M , Q , O , I , R ⟩" := (Build_Arena M Q O I R).
 
 Inductive void: Type :=.
 
@@ -118,7 +118,7 @@ Section Arena_Constructs.
         O := fun m => match m with exist _ m' _ => O m' end;
         I := fun m => match m with exist _ m' _ => I m' end;
         enable := fun m n => match m with exist _ m' _  => match n with exist _ n' _  => enable m' n' end end;
-      
+
       |}.
 
 End Arena_Constructs.
@@ -128,11 +128,11 @@ Infix "⊗" := Prod_Arena (at level 29, left associativity).
 Infix "↪" := Arrow_Arena (at level 11, right associativity).
 
 (* TODO: Define the isomorphism of Arenas up to which we work.
-   Prove that 1 is indeed a unit for the product and arrow. 
+   Prove that 1 is indeed a unit for the product and arrow.
  *)
 
 Definition bijection {A B : Type} (f : A -> B) :=
-  (forall x y, f x = f y -> x = y) /\ (forall y, exists x, f x = y). 
+  (forall x y, f x = f y -> x = y) /\ (forall y, exists x, f x = y).
 
 Definition arena_isomorphism {A1 A2 : Arena} (f : @M A1 -> @M A2) : Prop :=
   bijection f /\ forall m n, (@Q A1 m <-> @Q A2 (f m)) /\ (@O A1 m <-> @O A2 (f m)) /\
@@ -142,7 +142,7 @@ Definition isomorphic (A1 A2 : Arena) : Prop := exists f, @arena_isomorphism A1 
 
 Lemma iso_reflexive : forall A, isomorphic A A.
 Proof.
-  intros. unfold isomorphic, arena_isomorphism. exists (fun x => x). 
+  intros. unfold isomorphic, arena_isomorphism. exists (fun x => x).
   split.
   - unfold bijection. intros. split; auto.
     intros. exists y. auto.
@@ -154,7 +154,7 @@ Proof.
   intros. unfold isomorphic, arena_isomorphism in *. destruct H as [f [Hbi Hiso] ].
 (** is yielding an inverse function from a bijection constructive?  *)
 Admitted.
-  
+
 
 
 
@@ -182,7 +182,7 @@ Proof.
     subst. auto.
   - exists (inr y). auto.
 Qed.
-    
+
 
 
 Definition isor {A : Arena} (m : M + void) : M :=
@@ -236,7 +236,7 @@ Lemma unit_left_id_exp : forall (A : Arena), exists (f : void + M -> M),
 Definition iso_curry {A B C : Arena} (m : @M A + (@M B + @M C)) : (@M A + @M B) + @M C :=
   match m with
   | inl a => inl (inl a)
-  | inr bc => 
+  | inr bc =>
     match  bc with
     | inl b => inl (inr b)
     | inr c => inr c
@@ -249,15 +249,15 @@ Proof.
   - repeat match goal with | [x : ?T1 + ?T2 |- _] => destruct x end;  simpl in *;
       try discriminate;
       try injection H; intros; simpl in *; subst; auto.
-  - repeat match goal with 
-           | [x : ?T1 + ?T2 |- _ ] => destruct x 
+  - repeat match goal with
+           | [x : ?T1 + ?T2 |- _ ] => destruct x
            end.
     + exists (inl m). auto.
     + exists (inr (inl m)). auto.
     + exists (inr (inr m)). auto.
 Qed.
-    
-  
+
+
 
 
 Lemma wf_init_prod : forall (A B : Arena), @Arena_WF A -> @Arena_WF B -> forall m,
@@ -372,9 +372,9 @@ Proof.
   - apply wf_e3_arrow; auto.
 Qed.
 
-Lemma enable_comp : forall (A B C : Arena) (a : @M A) (b : @M B) (c : @M C), 
-    @enable (Arrow_Arena A B)  (inr b) (inl a) -> 
-    @enable (Arrow_Arena B C) (inr c) (inl b) -> 
+Lemma enable_comp : forall (A B C : Arena) (a : @M A) (b : @M B) (c : @M C),
+    @enable (Arrow_Arena A B)  (inr b) (inl a) ->
+    @enable (Arrow_Arena B C) (inr c) (inl b) ->
     @enable (Arrow_Arena A C) (inr c) (inl a).
 Proof.
   intros A B C a b c Hba Hbc.
@@ -392,11 +392,11 @@ Inductive even : nat -> Prop :=
   | ev_SS (n : nat) (H : even n) : even (S (S n)).
 
 
-Lemma currying : forall (A B C : Arena), 
+Lemma currying : forall (A B C : Arena),
     exists (f : @M A + (@M B + @M C) -> (@M A + @M B) + @M C),
                  @arena_isomorphism  (Arrow_Arena A (Arrow_Arena B C)) (Arrow_Arena (Prod_Arena A B) C) f.
   Proof.
-    intros A B C. 
+    intros A B C.
     intros.
     exists iso_curry. unfold arena_isomorphism, bijection. split.
     - apply iso_curry_bij.
@@ -431,6 +431,85 @@ Lemma currying : forall (A B C : Arena),
      + left. right. right. repeat constructor; auto.
 Qed.
 
+  (* YZ: Here is an alternative way to automate. The advantage of this is that it might be reused more easily in other proofs *)
+
+  (* These lemmas should be moved to Utils, they help automating reasoning about [P] since its defined as the negation of [O] *)
+  Lemma Sum_Pred_negL: forall {A B: Type} (P: Utils.pred A) (Q: Utils.pred B) x, ~ P x <-> ~ (P +' Q) (inl x).
+  Proof.
+    split.
+    intros ? abs; inv abs; auto.
+    intros H ?; apply H; constructor; auto.
+  Qed.
+
+  Lemma Sum_Pred_negL_backward: forall {A B: Type} (P: Utils.pred A) (Q: Utils.pred B) x, ~ P x -> ~ (P +' Q) (inl x).
+  Proof.
+    intros; apply Sum_Pred_negL; auto.
+  Qed.
+
+  Lemma Sum_Pred_negL_forward: forall {A B: Type} (P: Utils.pred A) (Q: Utils.pred B) x, ~ (P +' Q) (inl x) -> ~ P x.
+  Proof.
+    intros ? ? ? ? ?; rewrite <- Sum_Pred_negL; auto.
+  Qed.
+
+  Lemma Sum_Pred_negR: forall {A B: Type} (P: Utils.pred A) (Q: Utils.pred B) x, ~ Q x <-> ~ (P +' Q) (inr x).
+  Proof.
+    split.
+    intros ? abs; inv abs; auto.
+    intros H ?; apply H; constructor; auto.
+  Qed.
+
+  Lemma Sum_Pred_negR_backward: forall {A B: Type} (P: Utils.pred A) (Q: Utils.pred B) x, ~ Q x -> ~ (P +' Q) (inr x).
+  Proof.
+    intros; apply Sum_Pred_negR; auto.
+  Qed.
+
+  Lemma Sum_Pred_negR_forward: forall {A B: Type} (P: Utils.pred A) (Q: Utils.pred B) x, ~ (P +' Q) (inr x) -> ~ Q x.
+  Proof.
+    intros ? ? ? ? ?; rewrite <- Sum_Pred_negR; auto.
+  Qed.
+
+  (* This invert our hypotheses *)
+  (* YZ: TODO: There's probably a way to declare hints to invert hypotheses/apply lemmas in contexts *)
+  Ltac invert_context :=
+    repeat (match goal with
+            | h: (_ +' _) _ |- _ => inv h
+            | h: (_ +'' _) _ _ |- _ => inv h
+            | h: (_ ∪ _) _ _ |- _ => inv h
+            | h: (_ ->' _) _ _ |- _ => inv h
+            | h: inl_ _ _ |- _ => inv h
+            | h: inr_ _ _ |- _ => inv h
+            | h: ~ (_ +' _) (inl _) |- _ => apply Sum_Pred_negL_forward in h
+            | h: ~ (_ +' _) (inr _) |- _ => apply Sum_Pred_negR_forward in h
+            end).
+
+  (* This should be moved to Utils, it tells auto that it can use the constructors of these inductive to solve goals *)
+  Hint Constructors Sum_Pred Inr_Pred Inl_Pred Sum_Rel Join_Rel Prod_Pred_to_Rel.
+
+  (* The solver reduces, destruct the expressions that are patterned matched on, unfold [P] to make the negations apparent, invert the context and finally calls auto.
+     TODO: We should define a Hint DB to reason about these predicates rather than explicitly rely on [auto using].
+   *)
+  Ltac solver :=
+    cbn;
+    repeat flatten_all;
+    unfold P in *; cbn in *; intros;
+    invert_context;
+    auto using Sum_Pred_negL_backward, Sum_Pred_negR_backward.
+
+  Lemma currying' : forall (A B C : Arena),
+      exists (f : @M A + (@M B + @M C) -> (@M A + @M B) + @M C),
+        @arena_isomorphism  (Arrow_Arena A (Arrow_Arena B C)) (Arrow_Arena (Prod_Arena A B) C) f.
+  Proof.
+    intros A B C.
+    exists iso_curry; unfold arena_isomorphism, bijection.
+    split.
+    - apply iso_curry_bij.
+    - intros [] []; cbn; intuition; solver.
+      (* YZ: Mmmh in one case two constructors can apply, and we need to pick the second one :( *)
+      constructor.
+      constructor.
+      right.
+      constructor; auto.
+  Qed.
 
 Section Plays.
 
@@ -450,7 +529,7 @@ Section Plays.
   Inductive pointer_sequence_wf {M : Type} : pointer_sequence M -> Prop :=
    | nil_wf : pointer_sequence_wf []
    | cons_wf (p: pointer_sequence M) (Hp : pointer_sequence_wf p) (m : M) (n : nat) (Hn : n = 0 \/ n < length p)  :
-       pointer_sequence_wf ((m,n) :: p). 
+       pointer_sequence_wf ((m,n) :: p).
 
 
   Fixpoint extract_points_to_fun {M : Type} (p : pointer_sequence M) : nat -> nat :=
@@ -486,7 +565,7 @@ Section Plays.
           * right. destruct ( S x =? S (@length (pointer M0) p)) eqn : Heq; try omega.
             apply Nat.eqb_eq in Heq. omega.
     Qed.
-      
+
 
     Lemma dec_points_to_cons : forall (M : Type) (m : M) (n : nat) (p : pointer_sequence M),
         decreasing (extract_points_to_fun ((m,n) :: p)) -> decreasing (extract_points_to_fun p).
@@ -495,7 +574,7 @@ Section Plays.
         - simpl. unfold decreasing. intros; left; auto.
         -
       Admitted.
-      
+
     Lemma dec_points_to_wf : forall (M : Type) (p : pointer_sequence M), decreasing (extract_points_to_fun p) ->
                                                                          pointer_sequence_wf p.
       Proof.
@@ -534,7 +613,7 @@ Section Plays.
               destruct H.
               -- omega.*)
       Admitted.
-    
+
   Record play (A : Arena) (p: pointer_sequence M): Prop :=
     {
       play_justifies: forall p' (m: M) (a: nat),
@@ -634,7 +713,7 @@ Section Plays.
 
   Lemma redirect_pres_decrease : forall f n, decreasing f -> decreasing (redirect n f).
   Proof.
-    specialize (Nat.eqb_eq) as Hnat. 
+    specialize (Nat.eqb_eq) as Hnat.
     unfold decreasing in *. intros f n Hdec m. intros.
     unfold redirect.
     destruct (f m =? n) eqn: Hfmn.
@@ -645,7 +724,7 @@ Section Plays.
       destruct (n <? f m) eqn : Hfmn.
       + specialize (Hdec m). destruct Hdec; omega.
       + apply Hdec.
-   Qed. 
+   Qed.
 
   (** definitely wrong  *)
   Definition decr_above_or_eq (n : nat) (f : nat -> nat) :=
@@ -654,9 +733,9 @@ Section Plays.
   Fixpoint delete_fun {M : Type} (p : pointer_sequence M) (X : M -> bool) : pointer_sequence M * (nat -> nat) :=
     match p with
     | [] => ([], fun x => x)
-    | x :: p => let (m,n) := x in 
+    | x :: p => let (m,n) := x in
                   let (p',f) := delete_fun p X in
-                  if X m 
+                  if X m
                   then (p', redirect (length p + 1) f )
                   else (x :: p',f) end.
 
@@ -672,7 +751,7 @@ Section Plays.
       destruct (X m) eqn: Hm; simpl.
       - simpl in *. clear Hm Heqa Heqdel IHp.
         induction p0; auto. simpl. rewrite <- IHp0. destruct a0. simpl. auto.
-      - clear Hm Heqa Heqdel IHp. 
+      - clear Hm Heqa Heqdel IHp.
          enough (map fst p0 = map fst (map (fun x : M0 * nat => let (m0, n1) := x in (m0, n0 n1))
           p0)). rewrite H. auto.
          induction p0; auto. simpl. destruct a0. simpl. rewrite IHp0. auto.
@@ -701,12 +780,12 @@ Section Plays.
       induction p; simpl; auto. destruct a as [m n]. destruct (delete_fun p X) as [p' f] eqn : Heq.
       destruct (X m) eqn : Hx; simpl in *; auto.
   Qed.
-     
+
 (*  Lemma delete_preserves_play_init : forall (A : Arena) (p : pointer_sequence M) (X : M -> bool),
       play *)
-(** doesn't hold in general*) 
+(** doesn't hold in general*)
 (*delete partially preserves pointer structure in the sense that if a -> b, neither a nor b in X, then still a-> b
-  also need some notion of the first valid ptr from a, where if 
+  also need some notion of the first valid ptr from a, where if
 *)
 (*
   Lemma delete_fun_predecreasing : forall (A : Arena) m n (p : pointer_sequence M) (X : M -> bool),
@@ -734,7 +813,7 @@ Section Plays.
         * constructor.
         * destruct p1. constructor.
   Admitted.
-  
+
   Fixpoint first_n {A : Type} (n : nat) (l : list A) :=
     match n with
     | 0 => []
@@ -766,7 +845,7 @@ Inductive first_valid_ptr_from (A : Arena) (p : pointer_sequence M) (X : M -> Pr
 
 
 (**Not sure this preserves play requirements*)
-  Inductive delete_rel (A : Arena): pointer_sequence M -> pointer_sequence M -> (M -> Prop) -> (nat -> nat) -> Prop := 
+  Inductive delete_rel (A : Arena): pointer_sequence M -> pointer_sequence M -> (M -> Prop) -> (nat -> nat) -> Prop :=
     | del_nil (P : M -> Prop) : delete_rel A nil nil P (fun x => x)
     | del_snoc_in (p p' : pointer_sequence M) (P : M -> Prop) (m : M) (Hm : P m) (n : nat) (f : nat -> nat)
                   (Hpp' :delete_rel A p' p P f) : delete_rel A p' (snoc p (m,n)) P (redirect (length p') f)
@@ -775,7 +854,7 @@ Inductive first_valid_ptr_from (A : Arena) (p : pointer_sequence M) (X : M -> Pr
 .
 
 
-  
+
   Definition name_set := nat -> bool.
   Definition empty : name_set := fun x => false.
   Definition add_elem x (s : name_set) := fun y => if Nat.eqb x y then true else s y.
@@ -796,9 +875,9 @@ Inductive first_valid_ptr_from (A : Arena) (p : pointer_sequence M) (X : M -> Pr
     fst (hered_just_fun p X).
 
   Inductive hered_just_rel (A : Arena) : pointer_sequence M -> pointer_sequence M -> (M -> Prop) -> (nat -> Prop) -> Prop :=
-    | hered_nil (P : M -> Prop) : hered_just_rel A [] [] P (fun x => False)  
+    | hered_nil (P : M -> Prop) : hered_just_rel A [] [] P (fun x => False)
     | hered_snoc_in (p p' : pointer_sequence M ) (P : M -> Prop) (m : M) (Hm : P m) (n : nat) (S : nat -> Prop)
-                    (Hpp' : hered_just_rel A  p' p P S) : hered_just_rel A (snoc p' (m,n)) (snoc p (m,n)) P 
+                    (Hpp' : hered_just_rel A  p' p P S) : hered_just_rel A (snoc p' (m,n)) (snoc p (m,n)) P
                                                                       (fun x => S x \/ x = length p)
     | hered_snoc_out (p p' : pointer_sequence M) (P : M -> Prop) (m : M) (Hm : ~ P m) (n : nat) (S : nat -> Prop)
                     (Hpp' : hered_just_rel A p' p P S) : hered_just_rel A p' (snoc p (m,n)) P S
@@ -819,12 +898,12 @@ Section Composition.
     - apply ([]).
     - apply Forall_tail in Hl as [Ha Ht]. remember (exist P a Ha). specialize (IHl Ht).
       apply (s :: IHl).
-  Defined. 
+  Defined.
 
   Lemma preserve_elem : forall (A : Type) (P : A-> Prop) (l : list A) (Hl : Forall P l),
       map (fun x => match x with exist _ a _ => a end) (list_subset_project A P l Hl) = l.
   Proof.
-    intros. induction l; auto. 
+    intros. induction l; auto.
     simpl.  destruct ( Forall_tail A0 P0 a l Hl). simpl. rewrite IHl. auto.
   Qed.
 
@@ -837,7 +916,7 @@ Section Composition.
   Definition lower_union_list_left (A B: Type) (l : list (A + B)) (Hl : Forall is_left l) : list A.
     induction l.
     - apply [].
-    - apply Forall_tail in Hl as [Ha Ht]. specialize (IHl Ht). 
+    - apply Forall_tail in Hl as [Ha Ht]. specialize (IHl Ht).
       unfold is_left in Ha. destruct a; try contradiction.
       apply (a :: IHl).
   Defined.
@@ -860,7 +939,7 @@ Section Composition.
   Proof.
     intros A B x. split; intros; destruct x; simpl; auto; discriminate.
   Qed.
-    
+
   Lemma is_right_iffb : forall (A B : Type) (x : A + B), is_right x <-> is_rightb x = true.
   Proof.
     intros A B x. split; intros; destruct x; simpl; auto; discriminate.
@@ -882,7 +961,7 @@ Section Composition.
     - apply [].
     - apply Forall_tail in H as [Ha Hp].
       apply IHp0. apply Hp.
-  Defined.    
+  Defined.
 
 
   Definition delete_right_lower {A B : Type} (l : pointer_sequence (A + B)) : pointer_sequence A.
@@ -915,5 +994,3 @@ Section Composition.
   Definition composition (A B C : Type) ()
 *)
 End Composition.
-
- 
