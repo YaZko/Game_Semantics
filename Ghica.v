@@ -386,6 +386,12 @@ Qed.
 
 (** could probably parts of automate this  *)
 
+
+Inductive even : nat -> Prop :=
+  | ev_0 : even 0
+  | ev_SS (n : nat) (H : even n) : even (S (S n)).
+
+
 Lemma currying : forall (A B C : Arena), 
     exists (f : @M A + (@M B + @M C) -> (@M A + @M B) + @M C),
                  @arena_isomorphism  (Arrow_Arena A (Arrow_Arena B C)) (Arrow_Arena (Prod_Arena A B) C) f.
@@ -394,64 +400,35 @@ Lemma currying : forall (A B C : Arena),
     intros.
     exists iso_curry. unfold arena_isomorphism, bijection. split.
     - apply iso_curry_bij.
-   - intros. repeat split; intros.
-     + destruct m; simpl in *. 
-       * inv H. repeat constructor. auto.
-       * inv H. inv H1; repeat constructor; auto.
-     + destruct m; simpl in *; inv H; try (inv H1).
-       * repeat constructor. auto.
-       * destruct m; simpl in *; repeat constructor.
-         -- injection H0. intros. discriminate.
-         -- discriminate.
-       * destruct m; simpl in *; repeat constructor.
-         -- injection H0. intros. subst. auto.
-         -- discriminate.
-       * destruct m; try discriminate. injection H0. intros. subst. repeat constructor. auto.
-     +  destruct m; simpl in *.
-       * inv H. constructor. unfold P in *. unfold not. intros. apply H1. 
-         inv H. assumption.
-       * inv H. inv H1.
-         -- constructor. unfold P in *. intros Hc. apply H. inv Hc. auto.
-         -- constructor. auto.
-     + destruct m; simpl in *.
-       * inv H. constructor. unfold P in *. intros Hc. apply H1. constructor. auto.
-       * destruct m; simpl in *.
-         -- constructor. inv H. constructor. unfold P in *. intros Hc. apply H1.
-            constructor. auto.
-        -- inv H. repeat constructor. auto.
-     +  destruct m; simpl in *.
-        * inv H.
-        * inv H. destruct m.
-          -- inv H1.
-          -- constructor. inv H1. auto.
-     + destruct m; simpl in *.
-       * inv H.
-       * destruct m; inv H. repeat constructor. auto.
-     + simpl in *. inv H; inv H0.
-       * simpl. repeat constructor. auto.
-       * inv H.
-         -- inv H0; repeat constructor; auto.
-         -- inv H0. inv H. inv H1. right. simpl. repeat constructor; auto.
-       * inv H. inv H1. inv H0. right. repeat constructor; auto.
-    +  destruct m; destruct n; inv H; inv H0; auto.
-      * simpl. constructor. constructor. inv H2. auto.
-      * inv H.
-      * simpl in *. inv H2.
-      simpl in *. left.  destruct m0; try discriminate.
-      * inv H.
-      * simpl in *. destruct a; destruct m; try discriminate. inv H2.
-      * simpl in *. destruct m; try discriminate.
-        -- inv H.
-        -- inv H. inv H1. inv H0. right. constructor.
-           ++ repeat constructor; auto.
-           ++ constructor. auto.
-      * simpl in *. destruct a; destruct m; try discriminate. inv H2. left. constructor. constructor.
-        destruct m0; try discriminate. injection H1 as Hmb. subst. injection H as Hmm. subst. constructor. auto.
-      * simpl in *. destruct m; destruct m0; try discriminate.
-        injection H. injection H. intros. subst. repeat constructor. injection H1. intros. subst. auto.
-      * simpl in *. destruct m; destruct m0; try discriminate; try inv H.
-        -- inv H1. inv H0. left. right. right. constructor; repeat constructor; auto.
-        -- inv H1.
+   - intros. repeat split; intros; simpl in *;
+               repeat match goal with
+                  | [H  : (?P ?A +' _) _ |- _] => inv H
+                  | [m : ?T1 + ?T2 |- _] => destruct m
+                  | [ H : inl ?m = inr ?n  |- _] => discriminate
+                  | [ H : inr ?m = inl ?n |- _] => discriminate
+                  | [ H : inl ?m = inl ?n |- _ ] => injection H; clear H; intros
+                  | [ H : inr ?m = inr ?n |- _ ] => injection H; clear H; intros
+                  | [ |- (_ +' _) (inl ?m)  ] => constructor
+                  | [ |- (_ +' _) (inr ?m) ] => constructor
+                  | [ H : ?P |- P] => assumption
+                  | [ |- @P _ _] => intro
+                  | [ H : @P _ _ |- False ] => apply H
+                  | [ H : inr_ _ _ |- _] => inv H
+                  | [ H : inl_ _ _ |- _ ] => inv H
+                  | [ |- inr_ _ _ ] => constructor
+                  | [ |- inl_ _ _ ] => constructor
+                  | [H : @Join_Rel _ _ _ _ _ |- _ ] => inv H
+                  | [H : (_ +'' _) _ _ |- _  ] => inv H
+                  | [ H : (_ ->' _) _ _ |- _ ] => inv H
+                  | _ => simpl in *; subst
+                  end; auto.
+     all : repeat match goal with
+           | [H : enable ?m ?n  |- _ ] => repeat constructor; auto
+           end.
+     + right. repeat constructor; auto.
+     + right. repeat constructor; auto.
+     + right. repeat constructor; auto.
+     + left. right. right. repeat constructor; auto.
 Qed.
 
 
