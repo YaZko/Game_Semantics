@@ -23,6 +23,8 @@ Ltac flatten_all :=
   | _ => idtac
   end.
 
+Inductive void: Type := .
+
 (****************************** Lists ******************************)
 
 Inductive prefix {A: Type}: relation (list A) :=
@@ -161,3 +163,68 @@ Infix "+''" := Sum_Rel (at level 40).
 Infix "∪" := Join_Rel (at level 60).
 Infix "⊆" := Sub_Pred (at level 60).
 Infix "⊆'" := inclusion (at level 60).
+
+Hint Constructors Sum_Pred Inr_Pred Inl_Pred Sum_Pred Sum_Rel Join_Rel Prod_Pred_to_Rel.
+
+(*
+We want some automation to solve goals manipulating these combinators
+*)
+Lemma Sum_Pred_negL: forall {A B: Type} (P:pred A) (Q:pred B) x, ~ P x <-> ~ (P +' Q) (inl x).
+Proof.
+  split.
+  intros ? abs; inv abs; auto.
+  intros H ?; apply H; constructor; auto.
+Qed.
+
+Lemma Sum_Pred_negL_backward: forall {A B: Type} (P:pred A) (Q:pred B) x, ~ P x -> ~ (P +' Q) (inl x).
+Proof.
+  intros; apply Sum_Pred_negL; auto.
+Qed.
+
+Lemma Sum_Pred_negL_forward: forall {A B: Type} (P:pred A) (Q:pred B) x, ~ (P +' Q) (inl x) -> ~ P x.
+Proof.
+  intros ? ? ? ? ?; rewrite <- Sum_Pred_negL; auto.
+Qed.
+
+Lemma Sum_Pred_negR: forall {A B: Type} (P:pred A) (Q:pred B) x, ~ Q x <-> ~ (P +' Q) (inr x).
+Proof.
+  split.
+  intros ? abs; inv abs; auto.
+  intros H ?; apply H; constructor; auto.
+Qed.
+
+Lemma Sum_Pred_negR_backward: forall {A B: Type} (P:pred A) (Q:pred B) x, ~ Q x -> ~ (P +' Q) (inr x).
+Proof.
+  intros; apply Sum_Pred_negR; auto.
+Qed.
+
+Lemma Sum_Pred_negR_forward: forall {A B: Type} (P:pred A) (Q:pred B) x, ~ (P +' Q) (inr x) -> ~ Q x.
+Proof.
+  intros ? ? ? ? ?; rewrite <- Sum_Pred_negR; auto.
+Qed.
+
+(* This invert our hypotheses *)
+Ltac invert_context :=
+  repeat (match goal with
+          | h: (_ +' _) _ |- _ => inv h
+          | h: (_ +'' _) _ _ |- _ => inv h
+          | h: (_ ∪ _) _ _ |- _ => inv h
+          | h: (_ ->' _) _ _ |- _ => inv h
+          | h: inl_ _ _ |- _ => inv h
+          | h: inr_ _ _ |- _ => inv h
+          | h: ~ (_ +' _) (inl _) |- _ => apply Sum_Pred_negL_forward in h
+          | h: ~ (_ +' _) (inr _) |- _ => apply Sum_Pred_negR_forward in h
+          end).
+
+(* This should be moved to Utils, it tells auto that it can use the constructors of these inductive to solve goals *)
+
+(* The solver reduces, destruct the expressions that are patterned matched on, unfold [P] to make the negations apparent, invert the context and finally calls auto.
+   TODO: We should define a Hint DB to reason about these predicates rather than explicitly rely on [auto using].
+ *)
+Ltac solver :=
+  cbn in *;
+  repeat flatten_all;
+  cbn in *; intros;
+  invert_context;
+  eauto using Sum_Pred_negL_backward, Sum_Pred_negR_backward.
+
