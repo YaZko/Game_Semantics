@@ -134,6 +134,16 @@ Infix "↪" := Arrow_Arena (at level 11, right associativity).
 Definition bijection {A B : Type} (f : A -> B) :=
   (forall x y, f x = f y -> x = y) /\ (forall y, exists x, f x = y).
 
+Lemma bijection_inv : forall (A B : Type) (f : A -> B), 
+    bijection f -> exists (g : B -> A), forall a, a = g (f a).
+Proof.
+  intros A B f Hf. unfold bijection in Hf. destruct Hf as [Hf1 Hf2].
+  assert (g : B -> A).
+  - intros b. specialize (Hf2 b).
+Admitted.
+
+
+
 Definition arena_isomorphism {A1 A2 : Arena} (f : @M A1 -> @M A2) : Prop :=
   bijection f /\ forall m n, (@Q A1 m <-> @Q A2 (f m)) /\ (@O A1 m <-> @O A2 (f m)) /\
                  (@I A1 m <-> @I A2 (f m)) /\ (@enable A1 m n <-> @enable A2 (f m) (f n)).
@@ -151,8 +161,7 @@ Qed.
 
 Lemma iso_symmetric : forall A1 A2, isomorphic A1 A2 -> isomorphic A2 A1.
 Proof.
-  intros. unfold isomorphic, arena_isomorphism in *. destruct H as [f [Hbi Hiso] ].
-(** is yielding an inverse function from a bijection constructive?  *)
+  
 Admitted.
 
 
@@ -242,7 +251,7 @@ Definition iso_curry {A B C : Arena} (m : @M A + (@M B + @M C)) : (@M A + @M B) 
     | inr c => inr c
     end
   end.
-Set Printing Implicit.
+
 Lemma iso_curry_bij : forall A B C, bijection (@iso_curry A B C).
 Proof.
   intros. unfold bijection. split; intros.
@@ -981,10 +990,81 @@ Section Composition.
       apply IHp. apply Hp.
   Defined.
 
+  Fixpoint take_left {A B : Type} (l : pointer_sequence (A + B)) : pointer_sequence A :=
+    match l with
+    | [] => []
+    | h :: t => let (m,n) := h in
+                match m with
+                | inl a => (a,n) :: take_left t
+                | _ => take_left t
+                end
+    end.
+
+  Fixpoint take_right {A B : Type} (l : pointer_sequence (A + B)) : pointer_sequence B :=
+    match l with
+    | [] => []
+    | h :: t => let (m,n) := h in
+                match m with
+                | inr b => (b,n) :: take_right t
+                | _ => take_right t
+                end
+    end.
+
+  Lemma delete_left_lemma : forall (A B : Type) (p : pointer_sequence (A + B)),
+      Forall (fun x => is_left (fst x)) (delete p is_rightb).
+    Proof.
+      intros A B p. specialize delete_none_in_X with (p := p) (X:= is_rightb) as Hdel.
+      remember (delete p is_rightb) as p'. clear Heqp'.
+      induction p'; constructor.
+      - inv Hdel. destruct a as [m n]. simpl in *. destruct m; try discriminate.
+        simpl. auto.
+      - inv Hdel. apply IHp'. auto.
+    Qed.
+
+  Lemma delete_right_lemma : forall (A B : Type) (p : pointer_sequence (A + B)),
+        Forall (fun x => is_right (fst x)) (delete p is_leftb).
+    Proof.
+      intros A B p. specialize delete_none_in_X with (p := p) (X := is_leftb) as Hdel.
+      remember (delete p is_leftb) as p'. clear Heqp'.
+      induction p'; constructor.
+      - inv Hdel. destruct a as [m n]. simpl in *. destruct m; try discriminate.
+        simpl. auto.
+      - inv Hdel. apply IHp'. auto.
+    Qed.
+
+
+  Lemma delete_left_lower_eq : forall (A B : Type) (p : pointer_sequence (A + B)),
+      map (fun x => (inr (fst x), snd x)) (take_right (delete p is_leftb)) = delete p is_leftb.
+  Proof.
+    intros A B p.
+    specialize (delete_right_lemma A B p) as Hdel. remember (delete p is_leftb) as p'.
+    clear Heqp'. induction Hdel; auto.
+    simpl. destruct x as [m n]. destruct m; try contradiction.
+    simpl. rewrite IHHdel. auto.
+  Qed.
+
+  Lemma delete_right_lower_eq : forall (A B : Type) (p : pointer_sequence (A + B)),
+      map (fun x => (inl (fst x), snd x)) (take_left (delete p is_rightb)) = delete p is_rightb.
+  Proof.
+    intros A B p.
+    specialize (delete_left_lemma A B p) as Hdel. remember (delete p is_rightb) as p'.
+    clear Heqp'. induction Hdel; auto.
+    simpl. destruct x as [m n]. destruct m; try contradiction.
+    simpl. rewrite IHHdel. auto.
+  Qed.
+
+
+  Definition delete_left_lower' {A B : Type} (l : pointer_sequence (A + B)) : pointer_sequence B :=
+    take_right (delete l is_leftb).
+  
+  Definition delete_right_lower' {A B : Type} (l : pointer_sequence (A + B)) : pointer_sequence A :=
+    take_left (delete l is_rightb).
+                                                                       
+
 
   Definition interaction (M N : Type) (tau : pointer_sequence M -> Prop) (sigma : pointer_sequence N -> Prop)
              : pointer_sequence (M + N) -> Prop :=
-    fun p => tau (delete_right_lower p) /\ sigma (delete_left_lower p).
+    fun p => tau (delete_right_lower' p) /\ sigma (delete_left_lower' p).
 
 
   Definition iteration (M : Type) (N : M -> bool) (sigma : pointer_sequence M -> Prop) : pointer_sequence M -> Prop  :=
